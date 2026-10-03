@@ -148,6 +148,7 @@ namespace ps5settings
 		ReadInt(json, "upscaleFilter", settings.upscaleFilter, 0, 3);
 		ReadBool(json, "highFrameRate", settings.highFrameRate);
 		ReadBool(json, "overlay", settings.overlay);
+		ReadBool(json, "gamePadStream", settings.gamePadStream);
 		ReadBool(json, "rumble", settings.rumble);
 		ReadBool(json, "pinCpuThreads", settings.pinCpuThreads);
 		ReadString(json, "radvDebug", settings.radvDebug);
@@ -182,6 +183,8 @@ namespace ps5settings
 		writer.Bool(settings.highFrameRate);
 		writer.Key("overlay");
 		writer.Bool(settings.overlay);
+		writer.Key("gamePadStream");
+		writer.Bool(settings.gamePadStream);
 		writer.Key("rumble");
 		writer.Bool(settings.rumble);
 		writer.Key("pinCpuThreads");

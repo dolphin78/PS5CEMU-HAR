@@ -1,0 +1,148 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Fri, 2 Oct 2026 23:00:00 +0000
+Subject: [PATCH] PS5: capture the GamePad for the local browser stream
+
+Capture independently of TV layout and pad window activation. Reuse Vulkan
+readback without consuming or saving user screenshots. HTTP, WebSocket streaming and JPEG encoding
+run in the port; capture requests are throttled and demand-driven.
+---
+diff --git a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+index acf2ed1..bf15b4e 100644
+--- a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+@@ -1,3 +1,6 @@
++#if defined(CEMU_PS5)
++#include "../stream/gamepad.h"
++#endif
+ #include "Cafe/HW/Latte/ISA/RegDefines.h"
+ 
+ #include "Cafe/HW/Latte/Core/Latte.h"
+@@ -1071,6 +1074,13 @@ void LatteRenderTarget_itHLECopyColorBufferToScanBuffer(MPTR colorBufferPtr, uin
+ 			s_ps5ScanBufferSource[screen] = {true, colorBufferPtr, colorBufferWidth, colorBufferHeight, colorBufferFormat, colorBufferPitch, colorBufferSwizzle, colorBufferTilemode};
+ 	}
+ 	s_ps5GamePadIsPrimary = showDRC;
++	if ((renderTarget & RENDER_TARGET_DRC) && ps5stream::WantFrame())
++	{
++		// Hidden scan buffers still need the same cache refresh as the TV output.
++		LatteTexture_UpdateDataToLatest(texView->baseTexture);
++		LatteTC_MarkTextureStillInUse(texView->baseTexture);
++		g_renderer->CaptureGamePadStream(texView);
++	}
+ #endif
+ 	if ((renderTarget & RENDER_TARGET_DRC) && g_renderer->IsPadWindowActive())
+ 		LatteRenderTarget_copyToBackbuffer(texView, true);
+diff --git a/src/Cafe/HW/Latte/Renderer/Renderer.h b/src/Cafe/HW/Latte/Renderer/Renderer.h
+index fa77fd9..290715f 100644
+--- a/src/Cafe/HW/Latte/Renderer/Renderer.h
++++ b/src/Cafe/HW/Latte/Renderer/Renderer.h
+@@ -72,6 +72,10 @@ public:
+ 	void RequestScreenshot(ScreenshotSaveFunction onSaveScreenshot);
+ 	void CancelScreenshotRequest();
+ 
++	#if defined(CEMU_PS5)
++	bool m_ps5StreamCapture = false;
++	void CaptureGamePadStream(LatteTextureView* view) { m_ps5StreamCapture = true; HandleScreenshotRequest(view, true); m_ps5StreamCapture = false; }
++#endif
+ 	virtual void HandleScreenshotRequest(LatteTextureView* texView, bool padView){}
+ 
+ 	virtual void DrawBackbufferQuad(LatteTextureView* texView, RendererOutputShader* shader, bool useLinearTexFilter,
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+index 4e7be57..9dad2df 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -1,3 +1,6 @@
++#if defined(CEMU_PS5)
++#include "../stream/gamepad.h"
++#endif
+ #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+ 
+ #if defined(CEMU_PS5)
+@@ -1023,26 +1026,35 @@ bool VulkanRenderer::IsPadWindowActive()
+ 
+ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool padView)
+ {
+-	if (!m_screenshot_requested && m_screenshot_state == ScreenshotState::None)
+-		return;
+-
+-	if (IsSwapchainInfoValid(false))
++#if defined(CEMU_PS5)
++	if (!m_ps5StreamCapture)
++#endif
+ 	{
+-		// we already took a pad view screenshow and want a main window screenshot
+-		if (m_screenshot_state == ScreenshotState::Main && padView)
++		if (!m_screenshot_requested && m_screenshot_state == ScreenshotState::None)
+ 			return;
+ 
+-		if (m_screenshot_state == ScreenshotState::Pad && !padView)
+-			return;
++		if (IsSwapchainInfoValid(false))
++		{
++			// we already took a pad view screenshow and want a main window screenshot
++			if (m_screenshot_state == ScreenshotState::Main && padView)
++				return;
++
++			if (m_screenshot_state == ScreenshotState::Pad && !padView)
++				return;
+ 
+-		// remember which screenshot is left to take
+-		if (m_screenshot_state == ScreenshotState::None)
+-			m_screenshot_state = padView ? ScreenshotState::Main : ScreenshotState::Pad;
++			// remember which screenshot is left to take
++			if (m_screenshot_state == ScreenshotState::None)
++				m_screenshot_state = padView ? ScreenshotState::Main : ScreenshotState::Pad;
++			else
++				m_screenshot_state = ScreenshotState::None;
++		}
+ 		else
+ 			m_screenshot_state = ScreenshotState::None;
+ 	}
+-	else
+-		m_screenshot_state = ScreenshotState::None;
++
++	// A hidden GamePad can arrive while the game's render pass is still open.
++	// Transfer commands and layout transitions must be recorded outside it.
++	draw_endRenderPass();
+ 
+ 	auto texViewVk = (LatteTextureViewVk*)texView;
+ 	auto baseImageTex = texViewVk->GetBaseImage();
+@@ -1242,8 +1254,10 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
+ 		barrier_image<TRANSFER_READ, TRANSFER_WRITE | IMAGE_WRITE>(baseImageTex, region.imageSubresource, baseImageTex->GetDefaultLayout());
+ 	}
+ 
++	barrier_bufferRange<TRANSFER_WRITE, HOST_READ>(buffer, 0, size);
++	const auto captureCommandBuffer = GetCurrentCommandBufferId();
+ 	SubmitCommandBuffer();
+-	WaitCommandBufferFinished(GetCurrentCommandBufferId());
++	WaitCommandBufferFinished(captureCommandBuffer);
+ 
+ 	bool formatValid = true;
+ 
+@@ -1269,9 +1283,10 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
+ 		}
+ 		break;
+ 	case VK_FORMAT_R8G8B8_UNORM:
+-		std::copy((uint8*)bufferPtr, (uint8*)bufferPtr + size, rgb_data.begin());
++		rgb_data.assign((uint8*)bufferPtr, (uint8*)bufferPtr + size);
+ 		break;
+ 	case VK_FORMAT_R8G8B8_SRGB:
++		rgb_data.resize(size);
+ 		std::transform((uint8*)bufferPtr, (uint8*)bufferPtr + size, rgb_data.begin(), SRGBComponentToRGB);
+ 		break;
+ 	default:
+@@ -1289,7 +1304,14 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
+ 		vkFreeMemory(m_logicalDevice, imageMemory, nullptr);
+ 
+ 	if (formatValid)
++	{
++#if defined(CEMU_PS5)
++		if (m_ps5StreamCapture)
++			ps5stream::SubmitFrame(rgb_data, width, height);
++		else
++#endif
+ 		SaveScreenshot(rgb_data, width, height, !padView);
++	}
+ }
+ 
+ static const float kQueuePriority = 1.0f;

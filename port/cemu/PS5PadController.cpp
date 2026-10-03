@@ -2,6 +2,7 @@
 #include "PS5PadController.h"
 #include "../app/ingame.h"
 #include "../ps5/pad.h"
+#include "../stream/gamepad.h"
 
 #include <array>
 #include <atomic>
@@ -86,6 +87,16 @@ ControllerState PS5PadController::raw_state()
 	m_previousAim = m_aim;
 	if (finger)
 		m_aim = m_cursor;
+
+	if (m_player == 0)
+	{
+		float x, y;
+		if (ps5stream::Touch(x, y))
+		{
+			m_touching = true;
+			m_touch = {x, y};
+		}
+	}
 
 	// motion, in the axes and units Cemu's SDL gamepads use (acceleration in g, rotation in
 	// radians per second). The DualSense axes as libScePad reports them need checking on a console.

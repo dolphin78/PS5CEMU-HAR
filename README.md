@@ -360,6 +360,45 @@ a ZIP to `dist/`. See [docs/BUILDING.md](docs/BUILDING.md), or run `make help` f
 - `tools/`: build, packaging and artwork scripts
 - `docs/`: building, the HEN setup guide and the compatibility list
 
+## Browser second screen
+
+In **Settings > Browser second screen**, turn **Browser second screen** on. Connect your phone, tablet or other
+touchscreen device to the same local network as the PS5, then scan the QR code or open the
+displayed `http://<PS5 IP>:<port>/` link in its browser. Start a game and the page shows the
+Wii U GamePad screen or the 3DS bottom screen, including when that screen is hidden on the TV.
+Drag or tap the picture to send Wii U touches to player 1 or native 3DS touch input. The DualSense continues to provide buttons and motion.
+
+The server selects the first available port starting at 8080; use the port shown in settings.
+The option is saved and defaults to off. Turning it off closes the server and releases remote
+touches. A disconnected or backgrounded browser releases its touch after at most one second.
+Any device on the local network can view the screen and send touches. Use one browser for
+touch control. The page does not stream sound.
+
+The page fills the browser viewport with the touch-screen picture and keeps touches aligned when
+you rotate your device. It has no on-screen controls or instructions.
+
+The browser uses separate persistent WebSocket connections for touches and video. Frames are
+encoded as JPEG at quality 75, bounded to the GamePad's native 854×480 (320×240 for 3DS), with a target of 30 updates
+per second. Encoding runs on its own worker. Each viewer receives the newest completed frame
+after decoding its previous one, so a slow connection does not build up a queue of stale images.
+Touches have independent handling, and press/release edges are preserved across controller polls.
+
+Vulkan readback still waits for the GPU; actual frame rate, latency and impact on gameplay need
+PS5 testing. Use the link on your local network; HTTP/WebSocket traffic is unencrypted. Guest
+Wi-Fi with client isolation may prevent the phone reaching the PS5.
+
+Host regression checks for the server and QR encoder are in `tools/tests`. On a Linux host with
+libjpeg and OpenSSL development headers, run:
+
+```sh
+c++ -std=c++20 -pthread -Iport/stream $(pkg-config --cflags libjpeg openssl) \
+  tools/tests/gamepad-stream-host.cpp port/stream/gamepad.cpp port/stream/qr.cpp \
+  port/stream/jpeg.cpp port/stream/websocket.cpp \
+  $(pkg-config --libs libjpeg openssl) -o /tmp/ps5cemu-stream-host
+python3 tools/tests/test-gamepad-stream.py /tmp/ps5cemu-stream-host
+node tools/tests/test-gamepad-browser.js
+```
+
 ## Credits
 
 - [Cemu](https://github.com/cemu-project/Cemu) by the Cemu team and contributors (MPL-2.0)

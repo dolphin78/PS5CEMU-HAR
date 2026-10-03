@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "input.h"
+#include "../stream/gamepad.h"
 #include "controls.h"
 #include "../ps5/pad.h"
 
@@ -318,6 +319,16 @@ namespace ps5azahar::input
 			cursorY = s_cursorY;
 			wasTouching = s_touching;
 			s_touching = touch;
+		}
+
+		float remoteX = 0, remoteY = 0;
+		const bool remoteTouch = ps5stream::Touch(remoteX, remoteY);
+		if (remoteTouch && !blocked)
+		{
+			window.TouchNormalized(remoteX, remoteY);
+			std::lock_guard lock(s_mutex);
+			s_touching = true;
+			return;
 		}
 
 		// where the cursor is (where it last was, without a finger)

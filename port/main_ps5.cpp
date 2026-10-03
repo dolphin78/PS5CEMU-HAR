@@ -25,6 +25,7 @@
 #include "ps5/privilege.h"
 #include "ps5/threads.h"
 #include "ps5/window.h"
+#include "stream/gamepad.h"
 
 // The PS4 SDK's version record: its size is set by the caller (libkernel)
 struct SceKernelSwVersion
@@ -115,6 +116,7 @@ int main(int argc, char* argv[])
 		setenv("RADV_DEBUG", settings.radvDebug.c_str(), 1);
 		ps5log::Line("[vulkan] RADV_DEBUG={} (radvDebug in ps5cemu.json)", settings.radvDebug);
 	}
+	ps5stream::Configure(settings.gamePadStream);
 	ps5pad::Init();
 	ps5pad::SetVibrationEnabled(settings.rumble);
 	ps5window::Initialize();

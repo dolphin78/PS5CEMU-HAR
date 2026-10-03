@@ -4,6 +4,8 @@
 # The rest of port/azahar (the launcher's 3DS library and controls, azahar.h) is built with the app
 # (port/CMakeLists.txt), which links what this builds: azahar_ps5_libraries.txt lists the archives.
 
+target_include_directories(video_core PRIVATE "${CMAKE_CURRENT_LIST_DIR}/..")
+
 add_library(azahar_ps5 STATIC
     core.cpp
     input.cpp

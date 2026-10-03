@@ -49,6 +49,7 @@ find_library(ICONV_LIBRARY iconv REQUIRED)
 find_library(FREETYPE_LIBRARY freetype REQUIRED)
 # what pacbrew's FreeType and curl were built with
 find_library(PNG16_LIBRARY png16 REQUIRED)
+find_library(JPEG_LIBRARY jpeg REQUIRED)
 find_library(BZ2_LIBRARY bz2 REQUIRED)
 find_library(PSL_LIBRARY psl REQUIRED)
 # the box art GameTDB serves (app/boxart.cpp): JPEG, and PNG through libpng16 above
@@ -70,6 +71,16 @@ add_library(CemuPS5 STATIC
 	app/ingame.h
 	app/ingame3ds.cpp
 	app/ingame3ds.h
+	stream/gamepad.cpp
+	stream/gamepad.h
+	stream/websocket.cpp
+	stream/websocket.h
+	stream/jpeg.cpp
+	stream/jpeg.h
+	stream/browser.h
+	stream/qr.cpp
+	stream/qr_file.cpp
+	stream/qr.h
 	app/install.cpp
 	app/updates.cpp
 	app/updates.h
@@ -132,6 +143,11 @@ set_source_files_properties(
 	azahar/controls.cpp
 	azahar/library.cpp
 	azahar/unavailable.cpp
+	stream/gamepad.cpp
+	stream/websocket.cpp
+	stream/jpeg.cpp
+	stream/qr.cpp
+	stream/qr_file.cpp
 	frontend/bubbles.cpp
 	frontend/launcher.cpp
 	frontend/settings.cpp
@@ -186,6 +202,8 @@ target_link_libraries(CemuPS5 PUBLIC
 	"${ICONV_LIBRARY}"
 	"${FREETYPE_LIBRARY}"
 	"${PNG16_LIBRARY}"
+	"${JPEG_LIBRARY}"
+	OpenSSL::Crypto
 	"${BZ2_LIBRARY}"
 	"${PSL_LIBRARY}"
 	"${TURBOJPEG_LIBRARY}"

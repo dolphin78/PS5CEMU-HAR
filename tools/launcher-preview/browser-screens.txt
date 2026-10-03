@@ -1,0 +1,17 @@
+# Browser second-screen settings on both emulator sides.
+wait 6
+press cross
+wait 2
+press r1 r1
+press down
+press down down down down down down down down down
+shot browser-screen-off
+press right cross
+shot browser-screen-on
+press circle circle circle
+press right cross
+wait 2
+press r1 r1
+press down
+press down down down down down down down down down down
+shot browser-screen-3ds

@@ -53,6 +53,7 @@ WIIU = {
         ("usb", "USB devices", "usb"), ("files", "Game files", "folder"), ("installs", "Updates and DLC", "install"),
         ("online", "Online", "online"),
         ("diagnostics", "Diagnostics", "diagnostics"), ("about", "About", "about"),
+        ("stream", "Browser second screen", "video"),
     ],
 }
 N3DS = {
@@ -64,6 +65,7 @@ N3DS = {
         ("borders", "Borders", "borders"), ("system", "System", "system"), ("files", "Game files", "folder"),
         ("installs", "Install CIA files", "install"), ("online", "Online", "online"),
         ("diagnostics", "Diagnostics", "diagnostics"), ("about", "About", "about"),
+        ("stream", "Browser second screen", "video"),
     ],
 }
 SIDES = {"main.rml": WIIU, "azahar.rml": N3DS}
@@ -211,7 +213,7 @@ def side(S):
         <div id="rail">{rail}</div>
         <span id="panel-title"></span>
         <div id="srows">{srows}</div>
-        <div id="panel-text"></div>
+        <div id="panel-text"></div><img id="stream-qr"/>
       </div>''')
 
     # the pages the screens open, over them

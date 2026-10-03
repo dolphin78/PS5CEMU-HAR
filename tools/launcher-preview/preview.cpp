@@ -37,6 +37,8 @@
 #include "frontend/settings.h"
 #include "frontend/sound.h"
 #include "frontend/ui_host.h"
+#include "stream/gamepad.h"
+#include "stream/qr.h"
 #include "ps5/kernel.h"
 #include "ps5/log.h"
 #include "ps5/notify.h"
@@ -488,6 +490,22 @@ namespace
 }
 
 // -- the launcher's host (frontend/ui_host.h) ----------------------------------------------------
+
+namespace ps5stream
+{
+    static bool s_enabled = false;
+    void Configure(bool enabled) { s_enabled = enabled; }
+    std::string Status() { return s_enabled ? "http://192.168.1.25:8081/" : "Off"; }
+    std::string ConnectionQR(const std::string& url)
+    {
+        const auto bytes = EncodeConnectionQR(url);
+        if (bytes.empty()) return {};
+        const auto output = s_output + "/browser-gamepad-qr.tga";
+        std::ofstream file(output, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        return file ? output : "";
+    }
+}
 
 namespace ps5ui
 {

@@ -54,10 +54,10 @@ mkdir -p "$games/Installs/Screenshots"
 python3 -B tools/launcher-preview/make-3ds-samples.py "$games/3ds"
 
 version=$(sed -n 's/^VERSION := *\([^ ]*\).*/\1/p' Makefile)
-if [[ ! -x $out/launcher-preview ]] || [[ -n $(find port/frontend port/azahar port/app/emulator.h port/app/paths.h port/app/boxart.h port/app/gameinfo.* port/app/compatibility.* port/app/pack_updates.h tools/launcher-preview -newer "$out/launcher-preview" -name '*.[ch]*' -print -quit) ]]; then
+if [[ ! -x $out/launcher-preview ]] || [[ -n $(find port/frontend port/stream/qr.cpp port/azahar port/app/emulator.h port/app/paths.h port/app/boxart.h port/app/gameinfo.* port/app/compatibility.* port/app/pack_updates.h tools/launcher-preview -newer "$out/launcher-preview" -name '*.[ch]*' -print -quit) ]]; then
     clang++-18 -std=c++20 -O1 -w -DFMT_HEADER_ONLY -DRMLUI_STATIC_LIB -DPS5CEMU_LAUNCHER_PREVIEW "-DPS5CEMU_VERSION=\"$version\"" "-DPS5CEMU_DATA=\"$out/data\"" \
         -I "$out/include" -I "$rmlui/Include" -I "$PS5CEMU_SYSROOT/include" -I port -I port/app -I "$prospero" \
-        tools/launcher-preview/preview.cpp port/frontend/launcher.cpp port/frontend/settings.cpp port/frontend/bubbles.cpp port/app/gameinfo.cpp port/app/compatibility.cpp \
+        tools/launcher-preview/preview.cpp port/frontend/launcher.cpp port/frontend/settings.cpp port/frontend/bubbles.cpp port/app/gameinfo.cpp port/app/compatibility.cpp port/stream/qr.cpp \
         port/frontend/wave.cpp port/azahar/library.cpp port/azahar/controls.cpp port/azahar/unavailable.cpp \
         "$prospero/bitmap_font_engine.cpp" "$out/rmlui/librmlui.a" -lz -o "$out/launcher-preview"
 fi

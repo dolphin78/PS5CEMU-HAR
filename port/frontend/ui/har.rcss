@@ -220,3 +220,6 @@ span, div, img { display: block; }
 .start-status { position: absolute; left: 0px; top: 580px; width: 650px; text-align: center; font-size: 28px; }
 .start-wiiu .start-status { color: #a9bcd6; } .start-3ds .start-status { color: #d8c6a3; }
 #start-version { position: absolute; left: 120px; top: 1004px; width: 400px; font-size: 20px; color: #7f93ae; }
+
+#stream-qr { position: absolute; left: 1190px; top: 500px; width: 198px; height: 198px; visibility: hidden; }
+#stream-qr.visible { visibility: visible; }
