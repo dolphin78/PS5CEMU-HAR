@@ -595,8 +595,8 @@ namespace ps5launcher
 		constexpr const char* kPageIds[] = {"packs-dialog", "player-dialog", "mapping-dialog", "files-dialog", "artic-dialog"};
 
 		// Settings' categories, as render-layout.py lays out the rail (the same order)
-		constexpr const char* kCategoriesWiiU[] = {"video", "audio", "controls", "usb", "files", "installs", "online", "diagnostics", "about", "stream"};
-		constexpr const char* kCategories3ds[] = {"video", "audio", "controls", "borders", "system", "files", "installs", "online", "diagnostics", "about", "stream"};
+		constexpr const char* kCategoriesWiiU[] = {"video", "audio", "controls", "stream", "usb", "files", "installs", "online", "diagnostics", "about"};
+		constexpr const char* kCategories3ds[] = {"video", "audio", "controls", "stream", "borders", "system", "files", "installs", "online", "diagnostics", "about"};
 		constexpr int kSettingRows = 7, kHints = 4;
 
 		constexpr const char* kBorderThemes[] = {"None", "Midnight", "Waves", "Aurora", "Shell", "PS5CEMU-HAR"};
@@ -1972,10 +1972,10 @@ namespace ps5launcher
 				auto& n3ds = m_settings.n3ds;
 				const auto onOff = [](bool on) { return std::string(on ? "On" : "Off"); };
 				if (category == "stream")
-					rows = {{"gamepadstream", "Browser second screen", onOff(m_settings.gamePadStream),
-						"Stream the touch screen to a phone or tablet on the same network.",
+					rows = {{"gamepadstream", "Remote touch screen", onOff(m_settings.gamePadStream),
+						"Use a phone or tablet as the touch screen.",
 						"Shows the Wii U GamePad or 3DS bottom screen in a browser and sends touches back to the game. "
-						"Scan the QR code or open the address below. Streaming works even when the touch screen is hidden on the TV."}};
+						"Scan the QR code or open the address on a device connected to the same network. Streaming works even when the touch screen is hidden on the TV."}};
 				else if (category == "video" && Is3ds())
 					rows = {
 						{"resolution", "Internal resolution", kResolutions[std::clamp(n3ds.resolution, 1, 10)], "Higher is sharper and asks more of the GPU.",
@@ -2117,7 +2117,7 @@ namespace ps5launcher
 			std::string PanelText(const std::string& category) const
 			{
 				if (category == "stream")
-					return ps5stream::Status() + "\nOpen this address on a phone or tablet connected to the same network.";
+					return "";
 				if (category == "diagnostics")
 				{
 					std::string text;
@@ -2369,7 +2369,7 @@ namespace ps5launcher
 				static const std::map<std::string, std::string> kTitles = {{"video", "Video"}, {"audio", "Audio"}, {"controls", "Controls"},
 					{"usb", "USB devices"},
 					{"borders", "Borders"}, {"system", "System"}, {"files", "Game files"}, {"installs", "Installs"}, {"online", "Online and updates"},
-					{"diagnostics", "Diagnostics"}, {"about", "About"}, {"stream", "Browser second screen"}};
+					{"diagnostics", "Diagnostics"}, {"about", "About"}, {"stream", "Remote touch screen"}};
 				SetText(m_document, "panel-title", kTitles.count(category) ? kTitles.at(category) : category);
 				m_settingRow = std::clamp(m_settingRow, 0, std::max(0, (int)rows.size() - 1));
 				for (int i = 0; i < kSettingRows; i++)
@@ -2383,10 +2383,17 @@ namespace ps5launcher
 					SetText(m_document, fmt::format("srow-value-{}", i), used ? rows[i].value : "");
 					SetText(m_document, fmt::format("srow-desc-{}", i), used ? rows[i].description : "");
 				}
-				SetClass(m_document, "stream-qr", "visible", category == "stream");
-				if (category == "stream")
-					if (auto* image = m_document->GetElementById("stream-qr"))
-						image->SetAttribute("src", ps5stream::ConnectionQR(ps5stream::Status()));
+				const bool stream = category == "stream";
+				const std::string streamStatus = stream && m_settings.gamePadStream ? ps5stream::Status() : "";
+				const bool connected = stream && m_settings.gamePadStream && streamStatus.rfind("http://", 0) == 0;
+				SetClass(m_document, "srow-0", "stream-row", stream);
+				SetClass(m_document, "srow-0", "enabled", stream && m_settings.gamePadStream);
+				SetClass(m_document, "srow-0", "connected", connected);
+				SetText(m_document, "stream-url", streamStatus);
+				SetClass(m_document, "stream-url", "visible", stream && m_settings.gamePadStream);
+				SetClass(m_document, "stream-qr", "visible", connected);
+				if (auto* image = m_document->GetElementById("stream-qr"))
+					image->SetAttribute("src", connected ? ps5stream::ConnectionQR(streamStatus) : "");
 				// the panel's text, under the rows
 				SetLines(m_document, "panel-text", PanelText(category));
 				if (Rml::Element* text = m_document->GetElementById("panel-text"))

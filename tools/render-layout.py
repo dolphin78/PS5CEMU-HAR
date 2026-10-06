@@ -49,11 +49,10 @@ WIIU = {
     # the library's grid: columns, rows, and a tile's size (box art is 5:7 on the Wii U)
     "grid": (7, 2, 212, 290),
     "settings": [
-        ("video", "Video", "video"), ("audio", "Audio", "audio"), ("controls", "Controls", "controls"),
+        ("video", "Video", "video"), ("audio", "Audio", "audio"), ("controls", "Controls", "controls"), ("stream", "Remote touch screen", "video"),
         ("usb", "USB devices", "usb"), ("files", "Game files", "folder"), ("installs", "Updates and DLC", "install"),
         ("online", "Online", "online"),
         ("diagnostics", "Diagnostics", "diagnostics"), ("about", "About", "about"),
-        ("stream", "Browser second screen", "video"),
     ],
 }
 N3DS = {
@@ -61,11 +60,10 @@ N3DS = {
     # 3DS box art is wider than tall
     "grid": (7, 3, 212, 196),
     "settings": [
-        ("video", "Video", "video"), ("audio", "Audio", "audio"), ("controls", "Controls", "controls"),
+        ("video", "Video", "video"), ("audio", "Audio", "audio"), ("controls", "Controls", "controls"), ("stream", "Remote touch screen", "video"),
         ("borders", "Borders", "borders"), ("system", "System", "system"), ("files", "Game files", "folder"),
         ("installs", "Install CIA files", "install"), ("online", "Online", "online"),
         ("diagnostics", "Diagnostics", "diagnostics"), ("about", "About", "about"),
-        ("stream", "Browser second screen", "video"),
     ],
 }
 SIDES = {"main.rml": WIIU, "azahar.rml": N3DS}
@@ -207,13 +205,14 @@ def side(S):
     rail = "".join(f'<span id="rail-{i}" class="rail-item">{glyph(icon, 36, "rail-glyph")}<span class="rail-label">{label}</span></span>'
                    for i, (_, label, icon) in enumerate(S["settings"]))
     srows = "".join(f'<span id="srow-{i}" class="srow"><span id="srow-label-{i}" class="srow-label"></span>'
-                    f'<span id="srow-value-{i}" class="srow-value"></span><span id="srow-desc-{i}" class="srow-desc"></span></span>'
+                    f'<span id="srow-value-{i}" class="srow-value"></span><span id="srow-desc-{i}" class="srow-desc"></span>'
+                    + ('<span id="stream-url" class="srow-url"></span><img id="stream-qr"/>' if i == 0 else "") + "</span>"
                     for i in range(SETTING_ROWS))
     add(f'''      <div id="settings" class="screen">
         <div id="rail">{rail}</div>
         <span id="panel-title"></span>
         <div id="srows">{srows}</div>
-        <div id="panel-text"></div><img id="stream-qr"/>
+        <div id="panel-text"></div>
       </div>''')
 
     # the pages the screens open, over them

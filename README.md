@@ -360,9 +360,9 @@ a ZIP to `dist/`. See [docs/BUILDING.md](docs/BUILDING.md), or run `make help` f
 - `tools/`: build, packaging and artwork scripts
 - `docs/`: building, the HEN setup guide and the compatibility list
 
-## Browser second screen
+## Remote touch screen
 
-In **Settings > Browser second screen**, turn **Browser second screen** on. Connect your phone, tablet or other
+In **Settings > Remote touch screen**, turn **Remote touch screen** on. Connect your phone, tablet or other
 touchscreen device to the same local network as the PS5, then scan the QR code or open the
 displayed `http://<PS5 IP>:<port>/` link in its browser. Start a game and the page shows the
 Wii U GamePad screen or the 3DS bottom screen, including when that screen is hidden on the TV.
@@ -375,7 +375,8 @@ Any device on the local network can view the screen and send touches. Use one br
 touch control. The page does not stream sound.
 
 The page fills the browser viewport with the touch-screen picture and keeps touches aligned when
-you rotate your device. It has no on-screen controls or instructions.
+you rotate your device. When video is unavailable, a quiet splash shows “Waiting for video”
+until frames resume. It has no on-screen controls or instructions.
 
 The browser uses separate persistent WebSocket connections for touches and video. Frames are
 encoded as JPEG at quality 75, bounded to the GamePad's native 854×480 (320×240 for 3DS), with a target of 30 updates

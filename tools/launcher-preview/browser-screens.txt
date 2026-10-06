@@ -1,17 +1,25 @@
-# Browser second-screen settings on both emulator sides.
+# Remote touch screen, matching focus states on both emulator sides.
 wait 6
 press cross
 wait 2
 press r1 r1
-press down
-press down down down down down down down down down
+press down down down
+shot remote-touch-wiiu-off-rail
+press right
 shot browser-screen-off
-press right cross
+press cross
 shot browser-screen-on
-press circle circle circle
+press circle
+shot remote-touch-wiiu-on-rail
+press circle circle
 press right cross
 wait 2
 press r1 r1
-press down
-press down down down down down down down down down down
+press down down down
 shot browser-screen-3ds
+press right
+shot remote-touch-3ds-on
+press cross
+shot remote-touch-3ds-off
+press circle
+shot remote-touch-3ds-off-rail

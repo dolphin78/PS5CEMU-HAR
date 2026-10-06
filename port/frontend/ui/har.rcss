@@ -221,5 +221,12 @@ span, div, img { display: block; }
 .start-wiiu .start-status { color: #a9bcd6; } .start-3ds .start-status { color: #d8c6a3; }
 #start-version { position: absolute; left: 120px; top: 1004px; width: 400px; font-size: 20px; color: #7f93ae; }
 
-#stream-qr { position: absolute; left: 1190px; top: 500px; width: 198px; height: 198px; visibility: hidden; }
-#stream-qr.visible { visibility: visible; }
+.srow.stream-row { height: 126px; }
+.srow.stream-row.enabled { height: 190px; }
+.srow.stream-row.connected { height: 300px; }
+.srow.stream-row .srow-desc { display: block; }
+.srow.stream-row.connected .srow-desc { width: 800px; }
+.srow-url { position: absolute; left: 30px; top: 120px; width: 800px; font-size: 26px; line-height: 38px; color: $accent; display: none; }
+.srow-url.visible { display: block; }
+#stream-qr { position: absolute; right: 30px; top: 82px; width: 198px; height: 198px; display: none; }
+#stream-qr.visible { display: block; }
