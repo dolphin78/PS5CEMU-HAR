@@ -67,6 +67,7 @@ namespace ps5shell
 			{"display", "Display", "How the launcher looks and where it opens.", 0, m_side},
 			{"sound", "Sound", "The menus' music and sounds, and the games' volume.", 0, m_side},
 			{"controllers", "Controllers", "The DualSense, for every player.", 0, m_side},
+			{"remote-touch", "Remote touch screen", "The Wii U GamePad or 3DS bottom screen in your browser.", 0, m_side},
 			{"folders", "Games and folders", "Where each side's games are.", 0, m_side},
 			{"online", "Online and updates", "Box art, graphic packs and PS5CEMU-HAR itself.", 0, m_side},
 			{"accessibility", "Accessibility", "Larger text, more contrast, less motion.", 0, m_side},
@@ -242,11 +243,6 @@ namespace ps5shell
 				"The side last used: PS5CEMU-HAR opens on the side you were on, and after a game on that game.\nAsk each time: it shows the two "
 				"sides first, as the start screen did.",
 				Kind::Segmented);
-			toggle("gamepadstream", "Remote touch screen", m_settings.gamePadStream,
-				"The Wii U GamePad or 3DS bottom screen in your browser.",
-				"Shows the Wii U GamePad or 3DS bottom screen in a browser and sends touches back to the game. "
-				"Connect your phone or tablet to the same network as the PS5, then scan the QR code or open the address shown here. "
-				"Audio stays on the PS5. Applies to both systems.");
 			toggle("pictures", "Game pictures behind menus", m_settings.ui.gamePictures, "The focused game's cover, softened, behind the screens.",
 				"The focused game's picture fills the screen behind the menus, softened and dimmed, so moving the focus changes the whole "
 				"screen. Off: the game's colours only.");
@@ -274,6 +270,14 @@ namespace ps5shell
 			action(Kind::Link, "page:wiiu-controllers", "Wii U players", "", "Each player's emulated controller, motion and buttons.",
 				"What the Wii U sees in each player's hands.");
 			action(Kind::Link, "page:3ds-controls", "3DS controls", "", "Motion, deadzone and buttons.", "The DualSense as the 3DS.");
+		}
+		else if (page == "remote-touch")
+		{
+			toggle("gamepadstream", "Remote touch screen", m_settings.gamePadStream,
+				"The Wii U GamePad or 3DS bottom screen in your browser.",
+				"Shows the Wii U GamePad or 3DS bottom screen in a browser and sends touches back to the game. "
+				"Connect your phone or tablet to the same network as the PS5, then scan the QR code or open the address shown here. "
+				"Audio stays on the PS5. Applies to both systems.");
 		}
 		else if (page == "folders")
 		{
@@ -1031,7 +1035,7 @@ namespace ps5shell
 				Secondary(), qw, 4);
 			qy += note.height + 26;
 		}
-		if (m_page == "display" && m_settings.gamePadStream)
+		if (m_page == "remote-touch" && m_settings.gamePadStream)
 		{
 			const std::string status = ps5stream::Status();
 			canvas.Text(Style(kOverlineStyle), qx, qy, "Remote touch screen", Secondary());

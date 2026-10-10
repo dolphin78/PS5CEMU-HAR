@@ -1,7 +1,8 @@
 # Shared remote touch screen settings in the v3.5.0 shell.
 wait 90
 press r1 r1
-press right down
+press down down down
+press right
 wait 25
 shot remote-touch-wiiu-off
 press cross
@@ -9,7 +10,7 @@ wait 25
 shot remote-touch-wiiu-on
 press circle
 press l1
-press right down
+press right
 wait 25
 shot remote-touch-3ds-on
 press cross

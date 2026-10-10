@@ -375,7 +375,7 @@ a ZIP to `dist/`. See [docs/BUILDING.md](docs/BUILDING.md), or run `make help` f
 
 ## Remote touch screen
 
-In **Settings > General > Display**, turn **Remote touch screen** on. Connect your phone, tablet or other
+In **Settings > General > Remote touch screen**, turn **Remote touch screen** on. Connect your phone, tablet or other
 touchscreen device to the same local network as the PS5, then scan the QR code or open the
 displayed `http://<PS5 IP>:<port>/` link in its browser. Start a game and the page shows the
 Wii U GamePad screen or the 3DS bottom screen, including when that screen is hidden on the TV.

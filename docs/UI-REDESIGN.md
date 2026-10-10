@@ -605,7 +605,7 @@ art again* · *Show where it is* (the path, and the drive).
 
 ### 6.5 Settings
 
-General > Display includes **Remote touch screen**, shared by Wii U and 3DS. It enables the local browser screen and touch input, persists across launches, and shows the connection URL and a QR code while enabled. Before a local address is available, show the server status. The phone and PS5 must use the same network; audio stays on the PS5.
+General > **Remote touch screen** is a shared Wii U and 3DS page, between Controllers and Games and folders. It enables the local browser screen and touch input, persists across launches, and shows the connection URL and a QR code while enabled. Before a local address is available, show the server status. The phone and PS5 must use the same network; audio stays on the PS5.
 
 ![Settings](ui-redesign/04-settings.jpg)
 
@@ -616,7 +616,7 @@ section of the side you are on comes right after General, the other side's after
 
 | Section | Pages |
 |---|---|
-| General | Display · Sound · Controllers · Games and folders · Online and updates · Accessibility |
+| General | Display · Sound · Controllers · Remote touch screen · Games and folders · Online and updates · Accessibility |
 | Wii U | Graphics · Controllers · USB devices · Install updates and DLC |
 | Nintendo 3DS | Graphics · Screens and borders · Controls · System and Home Menu · Install CIA files · Artic Base |
 | Help | Setup check · Diagnostics · About |
