@@ -45,6 +45,7 @@
 #include "input/InputManager.h"
 #include "util/crypto/aes128.h"
 
+#include <atomic>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -68,6 +69,9 @@ namespace ps5emu
 	{
 		bool s_firstStart = false;
 		bool s_coreStarted = false; // Cemu's settings are loaded: this session is Cemu's
+		// the draws Cemu records in a command buffer before it submits it (PS5Cemu_SubmitDraws)
+		constexpr uint32_t kCemuSubmitDraws = 300;
+		std::atomic<uint32_t> s_submitDraws{kCemuSubmitDraws};
 
 		// the app's heap in use, MiB (0 without the platform's statistics)
 		uint64_t HeapMiB()
@@ -333,6 +337,7 @@ namespace ps5emu
 			settings.overlay = config.overlay.position != ScreenPosition::kDisabled;
 			settings.volume = config.tv_volume;
 			settings.asyncShaders = config.async_compile;
+			settings.framePacing = ps5display::FramePacing();
 			ps5settings::Save(settings);
 		}
 	}
@@ -405,6 +410,14 @@ namespace ps5emu
 			ps5log::Line("[emu] games folder is now {}", options.gamesFolder);
 		}
 		GetConfigHandle().Save();
+	}
+
+	void SetSubmitDraws(int draws)
+	{
+		s_submitDraws = draws > 0 ? (uint32_t)draws : kCemuSubmitDraws;
+		if (draws > 0)
+			ps5log::Line("[vulkan] Cemu submits a command buffer every {} draws (cemuSubmitDraws in ps5cemu.json; its own is {})", draws,
+				kCemuSubmitDraws);
 	}
 
 	bool Scanning()
@@ -631,8 +644,12 @@ namespace ps5emu
 		// defaults over them
 		if (s_coreStarted)
 			GetConfigHandle().Save();
+		// the program the app was mounted from (ShadowMountPlus's record, which follows an install on
+		// a USB drive), else the usual install, else the one found running
 		std::error_code ec;
-		const std::string eboot = fs::exists(ps5paths::kMountedEboot, ec) ? ps5paths::kMountedEboot : ps5paths::Eboot();
+		const std::string source = ps5paths::MountSource();
+		const std::string eboot = !source.empty() ? source + "/eboot.bin" :
+			fs::exists(ps5paths::kMountedEboot, ec) ? ps5paths::kMountedEboot : ps5paths::Eboot();
 		const int result = sceSystemServiceLoadExec(eboot.c_str(), nullptr);
 		// it does not come back when it works; allow for one that returns before ending the process
 		if (result == 0)
@@ -640,4 +657,12 @@ namespace ps5emu
 				sceKernelUsleep(100000);
 		ps5log::Line("[emu] LoadExec({}) returned {:#x}", eboot, (uint32_t)result);
 	}
+}
+
+// patches/cemu: Cemu's VulkanRenderer::SubmitCommandBuffer, for each command buffer it begins. Each
+// submission costs the driver a copy of its words and an AGC submission, and the GPU a reset of its
+// state and a write-back of its caches (docs/DRIVER-PERFORMANCE.md)
+uint32 PS5Cemu_SubmitDraws()
+{
+	return ps5emu::s_submitDraws.load(std::memory_order_relaxed);
 }

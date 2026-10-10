@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Library</title>
+<link rel="stylesheet" href="tokens.css"><script src="kit.js"></script>
+<style>
+	/* the 3DS side: Pokémon X's stand-in has the focus, its screenshot behind everything */
+	.ambient { background: radial-gradient(60% 60% at 20% 10%, rgba(30, 50, 120, 0.45), transparent 70%), linear-gradient(180deg, #090f22 0%, #05070d 100%); }
+	/* a 400 x 240 screenshot: scaled to fill, softened (it is low resolution), then dimmed so the covers lead */
+	.shot { position: absolute; left: -40px; top: -24px; width: 2000px; height: 1200px; filter: blur(7px) saturate(1.1); image-rendering: auto; }
+	.scrim { position: absolute; inset: 0; background:
+		linear-gradient(180deg, rgba(5, 7, 13, 0.78) 0%, rgba(5, 7, 13, 0.62) 30%, rgba(5, 7, 13, 0.70) 70%, rgba(5, 7, 13, 0.94) 100%); }
+	.waves { position: absolute; left: 0; right: 0; bottom: 0; height: 420px; opacity: 0.10;
+		background: repeating-radial-gradient(140% 70% at 50% 130%, rgba(255, 220, 140, 0.9) 0 1.2%, transparent 1.2% 6%); }
+	.brand { display: flex; align-items: center; margin-right: 22px; }
+	.mark { position: relative; width: 40px; height: 40px; }
+	.mark i { position: absolute; width: 26px; height: 26px; border-radius: 8px; }
+	.mark i:first-child { left: 0; top: 0; background: var(--wiiu); }
+	.mark i:last-child { right: 0; bottom: 0; background: var(--n3ds); mix-blend-mode: screen; }
+
+	.filters { position: absolute; left: var(--safe-x); right: var(--safe-x); top: 136px; height: 52px; display: flex; align-items: center; gap: 12px; }
+	.filter { height: 52px; padding: 0 24px; border-radius: var(--r-pill); display: flex; align-items: center; gap: 12px; font: 500 24px Lexend; color: var(--text-2); background: var(--glass); border: 1.5px solid var(--glass-edge); }
+	.filter .n { font: 600 18px Lexend; color: var(--text-3); }
+	.filter.on { background: rgba(244, 182, 63, 0.20); color: var(--text); border-color: rgba(244, 182, 63, 0.45); }
+	.filter.on .n { color: #ffd98a; }
+	.tools { margin-left: auto; display: flex; gap: 28px; font: 500 22px Lexend; color: var(--text-2); }
+	.tools span { display: flex; align-items: center; gap: 10px; }
+
+	.shelf { position: absolute; left: var(--safe-x); top: 232px; width: 1660px; }
+	.line { display: flex; align-items: flex-end; gap: 28px; height: 200px; margin-bottom: 112px; }
+	.line .t { width: 216px; height: 200px; }
+	.artic { width: 216px; height: 200px; border-radius: 14px; border: 2px dashed rgba(244, 182, 63, 0.5); background: rgba(244, 182, 63, 0.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 0 16px; }
+	.artic b { font: 650 22px/1.2 Lexend; }
+	.artic span { font: 400 17px Lexend; color: var(--text-2); }
+	.focus-wrap { position: relative; z-index: 3; }
+	.focus-wrap .cover { transform: scale(1.07); transform-origin: 50% 100%; }
+	.caption { position: absolute; left: 0; top: 216px; width: 640px; white-space: nowrap; }
+	.caption .t2 { font: 650 26px Lexend; }
+	.caption .m { display: flex; align-items: center; gap: 12px; margin-top: 8px; font: 400 20px Lexend; color: var(--text-2); }
+	.fade { position: absolute; left: 0; right: 0; bottom: 0; height: 230px; background: linear-gradient(180deg, transparent, var(--ink-0) 82%); }
+
+	.az { position: absolute; right: 52px; top: 232px; display: flex; flex-direction: column; align-items: center; gap: 5px; font: 600 15px/20px Lexend; color: var(--text-3); }
+	.az b { width: 30px; height: 30px; border-radius: 50%; background: var(--n3ds); color: #2a1a02; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+</style></head>
+<body><div class="canvas">
+	<div class="ambient"></div>
+	<canvas class="shot" data-backdrop="shot:pkx"></canvas>
+	<div class="scrim"></div><div class="waves"></div>
+	<div class="grain"></div><div class="vignette"></div>
+
+	<div class="topbar">
+		<div class="brand"><div class="mark"><i></i><i></i></div></div>
+		<div class="sides"><span class=" wiiu"><i></i>Wii U</span><span class="on n3ds"><i></i>3DS</span></div>
+		<span class="shoulder">L1</span>
+		<div class="tabs"><span class="tab">Home</span><span class="tab on">Library</span><span class="tab">Settings</span></div>
+		<span class="shoulder">R1</span>
+		<div class="status"><span data-glyph="wifi" data-size="26"></span><div class="pads"><span class="pad p1">P1</span><span class="pad">P2</span></div><span>21:48</span></div>
+	</div>
+
+	<div class="filters">
+		<span class="filter on">All <span class="n">176</span></span>
+		<span class="filter">Recently added <span class="n">6</span></span>
+		<span class="filter">Favourites <span class="n">9</span></span>
+		<div class="tools">
+			<span><span data-glyph="square" data-size="26"></span>Sort: A to Z</span>
+			<span><span data-glyph="triangle" data-size="26"></span>Search</span>
+		</div>
+	</div>
+
+	<div class="shelf">
+		<div class="line">
+			<div class="artic"><b>Play from your 3DS</b><span>Artic Base, over your network</span></div>
+			<div data-game="acnl" class="t"></div>
+			<div data-game="bravely" class="t"></div>
+			<div data-game="fea" class="t"></div>
+			<div data-game="icarus" class="t"></div>
+			<div data-game="kirby" class="t"></div>
+		</div>
+		<div class="line">
+			<div data-game="luigi" class="t"></div>
+			<div data-game="mk7" class="t"></div>
+			<div data-game="mh4u" class="t"></div>
+			<div data-game="oras" class="t"></div>
+			<div class="focus-wrap"><div data-game="pkx" class="t focus"></div>
+				<div class="caption"><div class="t2">Pokémon X</div><div class="m">The Pokémon Company · 2013<span class="chip warn"><span class="dot" style="background:var(--warn)"></span>Minor issues</span><span class="chip">12 h played</span></div></div>
+			</div>
+			<div data-game="sm3dl" class="t"></div>
+		</div>
+		<div class="line">
+			<div data-game="smash" class="t"></div>
+			<div data-game="albw" class="t"></div>
+			<div data-game="oot3d" class="t"></div>
+			<div data-game="xc3d" class="t"></div>
+			<div data-game="yokai" class="t"></div>
+		</div>
+	</div>
+	<div class="fade"></div>
+
+	<div class="az"><span>#</span><span>A</span><span>B</span><span>F</span><span>K</span><span>L</span><span>M</span><b>P</b><span>S</span><span>T</span><span>X</span><span>あ</span></div>
+
+	<div class="hints">
+		<span class="hint"><span data-glyph="cross"></span>Play</span>
+		<span class="hint"><span data-glyph="options"></span>Options</span>
+		<span class="hint"><span data-glyph="l2" data-size="30"></span><span data-glyph="r2" data-size="30"></span>Jump by letter</span>
+		<span class="hint"><span data-glyph="touchpad"></span>Wii U</span>
+	</div>
+</div></body></html>

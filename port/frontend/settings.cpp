@@ -74,6 +74,7 @@ namespace ps5settings
 			ReadInt(json, "deadzone", n3ds.deadzone, 0, 50);
 			ReadBool(json, "performance", n3ds.performance);
 			ReadInt(json, "cpuClock", n3ds.cpuClock, 25, 400);
+			ReadBool(json, "invariantPosition", n3ds.invariantPosition);
 			ReadInt(json, "region", n3ds.region, -1, 6);
 			ReadInt(json, "language", n3ds.language, -1, 11);
 			ReadBool(json, "customTextures", n3ds.customTextures);
@@ -108,6 +109,8 @@ namespace ps5settings
 			writer.Bool(n3ds.performance);
 			writer.Key("cpuClock");
 			writer.Int(n3ds.cpuClock);
+			writer.Key("invariantPosition");
+			writer.Bool(n3ds.invariantPosition);
 			writer.Key("region");
 			writer.Int(n3ds.region);
 			writer.Key("language");
@@ -147,11 +150,17 @@ namespace ps5settings
 		ReadString(json, "gamesFolder", settings.gamesFolder);
 		ReadInt(json, "upscaleFilter", settings.upscaleFilter, 0, 3);
 		ReadBool(json, "highFrameRate", settings.highFrameRate);
+		ReadInt(json, "framePacing", settings.framePacing, 1, 3);
 		ReadBool(json, "overlay", settings.overlay);
 		ReadBool(json, "gamePadStream", settings.gamePadStream);
 		ReadBool(json, "rumble", settings.rumble);
 		ReadBool(json, "pinCpuThreads", settings.pinCpuThreads);
 		ReadString(json, "radvDebug", settings.radvDebug);
+		if (json.HasMember("radvEnvironment") && json["radvEnvironment"].IsObject())
+			for (const auto& member : json["radvEnvironment"].GetObject())
+				if (member.value.IsString())
+					settings.radvEnvironment[member.name.GetString()] = member.value.GetString();
+		ReadInt(json, "cemuSubmitDraws", settings.cemuSubmitDraws, 0, 5000);
 		ReadInt(json, "volume", settings.volume, 0, 100);
 		ReadInt(json, "gameCount", settings.gameCount, -1, 1000000);
 		ReadString(json, "launchError", settings.launchError);
@@ -160,13 +169,35 @@ namespace ps5settings
 		if (json.HasMember("n3ds") && json["n3ds"].IsObject())
 			ReadN3ds(json["n3ds"], settings.n3ds);
 		ReadString(json, "music", settings.music);
-		if (settings.music != "shop" && settings.music != "setup")
+		// the setup theme is the launcher's only music now: the shop theme's players get it
+		if (settings.music == "shop")
+			settings.music = "setup";
+		else if (settings.music != "setup")
 			settings.music = "off";
 		ReadInt(json, "musicVolume", settings.musicVolume, 0, 100);
 		ReadBool(json, "boxArt", settings.boxArt);
 		ReadBool(json, "asyncShaders", settings.asyncShaders);
 		ReadBool(json, "gamePadSpeaker", settings.gamePadSpeaker);
 		ReadBool(json, "menuSounds", settings.menuSounds);
+		if (json.HasMember("ui") && json["ui"].IsObject())
+		{
+			const rapidjson::Value& ui = json["ui"];
+			Ui& out = settings.ui;
+			ReadString(ui, "startOn", out.startOn);
+			if (out.startOn != "ask")
+				out.startOn = "last";
+			ReadString(ui, "lastSide", out.lastSide);
+			ReadBool(ui, "largerText", out.largerText);
+			ReadBool(ui, "highContrast", out.highContrast);
+			ReadBool(ui, "reduceMotion", out.reduceMotion);
+			ReadInt(ui, "holdMs", out.holdMs, 400, 1500);
+			ReadBool(ui, "gamePictures", out.gamePictures);
+			ReadBool(ui, "setupDone", out.setupDone);
+			ReadInt(ui, "libraryFilterWiiU", out.libraryFilter[0], 0, 3);
+			ReadInt(ui, "libraryFilter3ds", out.libraryFilter[1], 0, 2);
+			ReadInt(ui, "librarySortWiiU", out.librarySort[0], 0, 3);
+			ReadInt(ui, "librarySort3ds", out.librarySort[1], 0, 3);
+		}
 		return settings;
 	}
 
@@ -181,6 +212,8 @@ namespace ps5settings
 		writer.Int(settings.upscaleFilter);
 		writer.Key("highFrameRate");
 		writer.Bool(settings.highFrameRate);
+		writer.Key("framePacing");
+		writer.Int(settings.framePacing);
 		writer.Key("overlay");
 		writer.Bool(settings.overlay);
 		writer.Key("gamePadStream");
@@ -191,6 +224,16 @@ namespace ps5settings
 		writer.Bool(settings.pinCpuThreads);
 		writer.Key("radvDebug");
 		writer.String(settings.radvDebug.c_str());
+		writer.Key("radvEnvironment");
+		writer.StartObject();
+		for (const auto& [name, value] : settings.radvEnvironment)
+		{
+			writer.Key(name.c_str());
+			writer.String(value.c_str());
+		}
+		writer.EndObject();
+		writer.Key("cemuSubmitDraws");
+		writer.Int(settings.cemuSubmitDraws);
 		writer.Key("volume");
 		writer.Int(settings.volume);
 		writer.Key("gameCount");
@@ -214,6 +257,33 @@ namespace ps5settings
 		writer.String(settings.side.c_str());
 		writer.Key("launchError");
 		writer.String(settings.launchError.c_str());
+		writer.Key("ui");
+		writer.StartObject();
+		writer.Key("startOn");
+		writer.String(settings.ui.startOn.c_str());
+		writer.Key("lastSide");
+		writer.String(settings.ui.lastSide.c_str());
+		writer.Key("largerText");
+		writer.Bool(settings.ui.largerText);
+		writer.Key("highContrast");
+		writer.Bool(settings.ui.highContrast);
+		writer.Key("reduceMotion");
+		writer.Bool(settings.ui.reduceMotion);
+		writer.Key("holdMs");
+		writer.Int(settings.ui.holdMs);
+		writer.Key("gamePictures");
+		writer.Bool(settings.ui.gamePictures);
+		writer.Key("setupDone");
+		writer.Bool(settings.ui.setupDone);
+		writer.Key("libraryFilterWiiU");
+		writer.Int(settings.ui.libraryFilter[0]);
+		writer.Key("libraryFilter3ds");
+		writer.Int(settings.ui.libraryFilter[1]);
+		writer.Key("librarySortWiiU");
+		writer.Int(settings.ui.librarySort[0]);
+		writer.Key("librarySort3ds");
+		writer.Int(settings.ui.librarySort[1]);
+		writer.EndObject();
 		writer.EndObject();
 		const std::string temporary = std::string(ps5paths::kLauncherSettings) + ".tmp";
 		{

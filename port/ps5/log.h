@@ -14,6 +14,11 @@ namespace ps5log
 	void Open(const char* folder);
 	void Write(std::string_view line);
 	const char* Path();
+	// The Vulkan driver's messages go to stderr, which only the klog shows: its submission
+	// timings every 10 s ("radv/ps5 submissions: ..."), the VideoOut mode it took ("wsi/videoout:
+	// ..."), its errors. From this call on they are in the boot log too, as "[driver] ..." lines;
+	// the rest of stderr still goes where it went. Call it once, before the driver starts.
+	void ForwardDriverMessages();
 
 	template<typename... Args>
 	void Line(fmt::format_string<Args...> format, Args&&... args)

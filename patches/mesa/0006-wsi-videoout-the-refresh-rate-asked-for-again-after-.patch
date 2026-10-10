@@ -1,0 +1,158 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Tue, 6 Oct 2026 16:55:06 +0000
+Subject: [PATCH] wsi/videoout: the refresh rate asked for again, after a
+ launcher's swapchain
+
+VideoOut opens once per process and settles its mode as it opens: at
+119.88 Hz where the title's param.json declares high-frame-rate output,
+else at 59.94 Hz, for the rest of the process. A title whose launcher
+presents through the driver first (PS5CEMU-HAR's, on the GPU) opens it
+at the launcher's 59.94 Hz, and a game asking for 120 Hz output after it
+would stay at 59.94 Hz.
+
+wsi_videoout_set_high_frame_rate(high) configures the open output again
+once no swapchain presents on it: the high-frame-rate mode where
+param.json (PS5_VIDEOOUT_PARAM_JSON, read again) declares it, the output
+takes it and a vblank then comes every 8 ms, as at the open; or back to
+59.94 Hz. The display modes offered follow, so the next surface sees
+the 119.88 Hz modes or not. It returns 1 at 119.88 Hz, 0 at 59.94 Hz,
+and -1 while the output is not open yet (it settles as it opens, as
+before) or a swapchain still presents on it.
+
+The open's configuration moves into videoout_configure_locked, which
+both use; a process that never calls the new function behaves as before.
+---
+ src/vulkan/wsi/wsi_common_videoout.c | 94 +++++++++++++++++++++-------
+ 1 file changed, 70 insertions(+), 24 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common_videoout.c b/src/vulkan/wsi/wsi_common_videoout.c
+index b2e4e68..c4a7554 100644
+--- a/src/vulkan/wsi/wsi_common_videoout.c
++++ b/src/vulkan/wsi/wsi_common_videoout.c
+@@ -40,6 +40,11 @@
+  * acquire takes a buffer that is neither on screen, nor waiting for its flip
+  * to show, nor held by an application, the one flipped longest ago, and waits
+  * for a flip or a vblank when none is.
++ *
++ * VideoOut is opened once per process, in 119.88 Hz mode where the title's
++ * param.json declares high-frame-rate output, and keeps its mode. A title
++ * whose first swapchain was its launcher's asks for the rate its renderer
++ * wants once that swapchain is gone (wsi_videoout_set_high_frame_rate).
+  */
+ 
+ #include <assert.h>
+@@ -404,9 +409,45 @@ videoout_vblank_period_ns(int handle)
+    return intervals[VIDEOOUT_PERIOD_INTERVALS / 2];
+ }
+ 
++/* The output in the high-frame-rate mode, where the title declares it, the
++ * output takes it and the display then refreshes at it; or back in the
++ * standard one. Under lock, with the output open. */
++static void
++videoout_configure_locked(struct wsi_videoout_output *out, bool high)
++{
++   if (!high) {
++      if (out->high_frame_rate) {
++         const int restored = sceVideoOutConfigureOutput(out->handle, PS5_VIDEO_OUT_MODE_RESTORE, NULL, NULL, NULL);
++         out->high_frame_rate = false;
++         fprintf(stderr, "wsi/videoout: 59.94 Hz again (%d)\n", restored);
++      }
++      return;
++   }
++   if (out->high_frame_rate || !videoout_title_declares_high_frame_rate())
++      return;
++   const int supported =
++      sceVideoOutIsOutputSupported(out->handle, PS5_VIDEO_OUT_MODE_HIGH_FRAME_RATE, NULL, NULL, NULL);
++   const int configured =
++      supported > 0 ? sceVideoOutConfigureOutput(out->handle, PS5_VIDEO_OUT_MODE_HIGH_FRAME_RATE, NULL, NULL, NULL)
++                    : supported;
++   out->high_frame_rate = configured == 0;
++   if (out->high_frame_rate) {
++      const uint64_t period = videoout_vblank_period_ns(out->handle);
++      if (period > VIDEOOUT_HIGH_REFRESH_LIMIT_NS) {
++         sceVideoOutConfigureOutput(out->handle, PS5_VIDEO_OUT_MODE_RESTORE, NULL, NULL, NULL);
++         out->high_frame_rate = false;
++         fprintf(stderr,
++                 "wsi/videoout: 119.88 Hz accepted, but a vblank comes every %.3f ms; 59.94 Hz restored\n",
++                 (double)period / 1e6);
++      }
++   } else {
++      fprintf(stderr, "wsi/videoout: 119.88 Hz %s (%d); presenting at 59.94 Hz\n",
++              supported > 0 ? "refused" : "not supported", configured);
++   }
++}
++
+ /* Opens VideoOut once per process, in the high-frame-rate mode where the
+- * title declares it, the output takes it and the display then refreshes at
+- * it. Under lock. */
++ * title declares it (videoout_configure_locked). Under lock. */
+ static bool
+ videoout_open_locked(void)
+ {
+@@ -419,28 +460,7 @@ videoout_open_locked(void)
+       fprintf(stderr, "wsi/videoout: sceVideoOutOpen failed: 0x%08x\n", (unsigned)out->handle);
+       return false;
+    }
+-   if (videoout_title_declares_high_frame_rate()) {
+-      const int supported =
+-         sceVideoOutIsOutputSupported(out->handle, PS5_VIDEO_OUT_MODE_HIGH_FRAME_RATE, NULL, NULL, NULL);
+-      const int configured =
+-         supported > 0
+-            ? sceVideoOutConfigureOutput(out->handle, PS5_VIDEO_OUT_MODE_HIGH_FRAME_RATE, NULL, NULL, NULL)
+-            : supported;
+-      out->high_frame_rate = configured == 0;
+-      if (out->high_frame_rate) {
+-         const uint64_t period = videoout_vblank_period_ns(out->handle);
+-         if (period > VIDEOOUT_HIGH_REFRESH_LIMIT_NS) {
+-            sceVideoOutConfigureOutput(out->handle, PS5_VIDEO_OUT_MODE_RESTORE, NULL, NULL, NULL);
+-            out->high_frame_rate = false;
+-            fprintf(stderr,
+-                    "wsi/videoout: 119.88 Hz accepted, but a vblank comes every %.3f ms; 59.94 Hz restored\n",
+-                    (double)period / 1e6);
+-         }
+-      } else {
+-         fprintf(stderr, "wsi/videoout: 119.88 Hz %s (%d); presenting at 59.94 Hz\n",
+-                 supported > 0 ? "refused" : "not supported", configured);
+-      }
+-   }
++   videoout_configure_locked(out, true);
+    return true;
+ }
+ 
+@@ -465,6 +485,32 @@ wsi_videoout_set_flip_rate(int rate)
+    return result;
+ }
+ 
++PUBLIC int wsi_videoout_set_high_frame_rate(bool high);
++
++/* The refresh rate for the next swapchain, once another's (a launcher's) has
++ * gone: VideoOut opens once per process and settles its mode as it opens, so
++ * a renderer that wants the other rate asks for it here first. Taken where
++ * the title's param.json (PS5_VIDEOOUT_PARAM_JSON, read again now) declares
++ * high-frame-rate output and the display refreshes at it, as at the open.
++ * Returns 1 at 119.88 Hz, 0 at 59.94 Hz, -1 while VideoOut is not open yet (it
++ * then settles as it opens) or a swapchain still presents on it. */
++PUBLIC int
++wsi_videoout_set_high_frame_rate(bool high)
++{
++   call_once(&videoout_once, videoout_output_init_once);
++   struct wsi_videoout_output *out = &videoout_output;
++   mtx_lock(&out->lock);
++   int result = -1;
++   if (out->opened && out->handle >= 0 && out->current == NULL) {
++      videoout_configure_locked(out, high);
++      out->modes_settled = true;
++      out->high_mode_offered = out->high_frame_rate;
++      result = out->high_frame_rate ? 1 : 0;
++   }
++   mtx_unlock(&out->lock);
++   return result;
++}
++
+ static void
+ videoout_settle_modes(void)
+ {
+-- 
+2.43.0
+

@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Mon, 5 Oct 2026 21:27:52 +0000
+Subject: [PATCH] radv/ps5: fence status without the clock, and waits that
+ sleep less
+
+vkGetFenceStatus waits with an absolute timeout of 0, and every one that
+found its fence not yet signalled read the monotonic clock to learn so, a
+system call on the console. Cemu asks after every submission and on every
+occlusion query update. A zero timeout now returns VK_TIMEOUT without it.
+
+A wait that outlasts its 1.5 ms spin slept a millisecond between looks at
+the marker, so it woke up to a millisecond after the GPU got there. The
+flip thread waits that way for each frame before submitting its flip, and
+Cemu waits that way for the previous frame at every swap: a frame done
+just before a vblank could miss it. The sleeps are now 200 us.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VwQbTVomEg8vnnGcSRXLMp
+---
+ src/amd/vulkan/winsys/ps5/radv_ps5_sync.c   | 6 ++++++
+ src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c | 7 ++++++-
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_sync.c b/src/amd/vulkan/winsys/ps5/radv_ps5_sync.c
+index a01b3bc..6b7717d 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_sync.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_sync.c
+@@ -140,6 +140,12 @@ radv_ps5_sync_wait_many(struct vk_device *device, uint32_t wait_count, const str
+          mtx_unlock(&queue->sync_lock);
+          return VK_SUCCESS;
+       }
++      /* A status query (vkGetFenceStatus) asks with no time at all: it
++       * needs no clock, which is a system call on the console. */
++      if (abs_timeout_ns == 0) {
++         mtx_unlock(&queue->sync_lock);
++         return VK_TIMEOUT;
++      }
+       const uint64_t now = os_time_get_nano();
+       if (now >= abs_timeout_ns) {
+          mtx_unlock(&queue->sync_lock);
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
+index 6319a33..1be1645 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c
+@@ -87,6 +87,11 @@ radv_ps5_queue_poll(struct radv_ps5_queue *queue)
+ /* Before sleeping, the marker is checked in a loop for this long: most waits
+  * end well inside a millisecond (PS5_Vulkan R36). */
+ #define RADV_PS5_SPIN_NS UINT64_C(1500000)
++/* After that, the marker is checked between sleeps this long. A wait wakes up
++ * to this late after the GPU reaches it, and the flip thread waits like this
++ * for each frame before its flip: a millisecond could miss the vblank a frame
++ * finished in time for. */
++#define RADV_PS5_SLEEP_US 200
+ 
+ bool
+ radv_ps5_queue_wait_seq(struct radv_ps5_queue *queue, uint64_t seq, uint64_t abs_timeout_ns)
+@@ -116,7 +121,7 @@ radv_ps5_queue_wait_seq(struct radv_ps5_queue *queue, uint64_t seq, uint64_t abs
+       if (now < spin_until)
+          __builtin_ia32_pause();
+       else
+-         radv_ps5_sleep_us(1000);
++         radv_ps5_sleep_us(RADV_PS5_SLEEP_US);
+    }
+ }
+ 

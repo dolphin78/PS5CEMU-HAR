@@ -28,11 +28,30 @@ namespace ps5settings
 		bool customTextures = false;  // texture packs from azahar/load/textures/<title ID> (Azahar's custom_textures)
 		int border = 0;				  // artwork around the screens: 0 none, else ps5ingame3ds::kBorderNames' theme
 		int cpuClock = 100;			  // the emulated CPU's speed, percent of the 3DS's (Azahar's cpu_clock_percentage)
+		// only in ps5cemu.json: every 3DS vertex position computed invariantly (Azahar patch 0010), as
+		// Azahar does on Apple GPUs, for Pokemon X's moving black stipples (#23). Off, as on a PC,
+		// until a console has shown it fixes them, and what it costs
+		bool invariantPosition = false;
 		std::string articAddress;	  // the last Artic Base server's IPv4 address, a 3DS on the network
 		int gameCount = -1;			  // the library's games when last looked for (the start screen's); -1: never
 		std::map<std::string, std::string> buttons; // 3DS button: DualSense input, where not the default
 		uint64_t lastGame = 0;		  // title ID, or one made from the path
 		std::vector<uint64_t> recent; // newest first, at most four
+	};
+
+	// The new launcher's own (docs/UI-REDESIGN.md, 9.8), under "ui"
+	struct Ui
+	{
+		std::string startOn = "last"; // "last": the side last used; "ask": the side chooser
+		std::string lastSide;		 // "wiiu" or "3ds": the side last used, restored at every start
+		bool largerText = false;
+		bool highContrast = false;
+		bool reduceMotion = false;
+		int holdMs = 800;			 // hold to confirm, 400 to 1500
+		bool gamePictures = true;	 // the focused game's picture behind the menus
+		bool setupDone = false;		 // the Setup check was shown once
+		int libraryFilter[2] = {0, 0}; // per side (Wii U, 3DS): All, Recently added, Favourites, Graphic packs on
+		int librarySort[2] = {1, 1};   // Recently played, A to Z (the default), Release year, How it runs
 	};
 
 	struct Launcher
@@ -41,6 +60,9 @@ namespace ps5settings
 		int upscaleFilter = 1;		  // how the game's picture is scaled to 4K: Cemu's upscale_filter
 		bool highFrameRate = false;	  // the 119.88 Hz mode where the display has it
 		bool gamePadStream = false; // local browser screen and touch input
+		// frame pacing (ps5/display.h): each frame shown for at least this many refreshes, 1 to 3;
+		// 2 is an even 60 fps at 119.88 Hz and an even 30 at 59.94 Hz (Settings > Video, in-game Graphics)
+		int framePacing = 1;
 		bool overlay = false;		  // Cemu's performance overlay from the start
 		bool asyncShaders = true;	  // Cemu's async_compile (Settings > Video, and the in-game menu's Graphics)
 		bool gamePadSpeaker = false;  // the GamePad's sound on player 1's DualSense speaker (Settings > Audio)
@@ -49,14 +71,21 @@ namespace ps5settings
 		// only in ps5cemu.json: RADV_DEBUG for the Vulkan driver (e.g. "nongg,nohiz"), to narrow down
 		// a GPU hang by turning hardware features off; empty by default
 		std::string radvDebug;
+		// only in ps5cemu.json: more of the Vulkan driver's environment, name to value, for its
+		// performance experiments (RADV_, MESA_ and ACO_ names only), e.g.
+		// {"RADV_THREADED_RECORDING": "1", "RADV_PS5_GPU_TIME": "1"}; empty by default
+		std::map<std::string, std::string> radvEnvironment;
+		// only in ps5cemu.json: how many draws Cemu records in a command buffer before it submits it,
+		// for the driver's performance experiments (docs/DRIVER-PERFORMANCE.md); 0, the default,
+		// keeps Cemu's own 300
+		int cemuSubmitDraws = 0;
 		int volume = 100;			  // the TV sound, in percent
 		int gameCount = -1;			  // the Wii U library's games when last looked for (the start screen's); -1: never
 		uint64_t lastGame = 0;		  // title ID
 		std::vector<uint64_t> recent; // newest first, at most four
 		N3ds n3ds;
-		// The launcher's own sound, on both sides (frontend/sound.h): its music ("shop", "setup" or
-		// "off") and the music's volume in percent, and the menu's sounds.
-		std::string music = "shop";
+		// The launcher's own sound, on both sides (frontend/sound.h): its music ("setup" or "off") and the music's volume in percent, and the menu's sounds.
+		std::string music = "setup";
 		int musicVolume = 50;
 		bool boxArt = true;			  // box art from GameTDB (Settings > Online and updates)
 		bool menuSounds = true;
@@ -66,6 +95,7 @@ namespace ps5settings
 		// Why the last game did not start, when that needed a fresh process to show (the launcher
 		// shows it once, then clears it).
 		std::string launchError;
+		Ui ui;
 	};
 
 	Launcher Load();

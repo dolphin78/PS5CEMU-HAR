@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Quick Menu</title>
+<link rel="stylesheet" href="tokens.css"><script src="kit.js"></script>
+<style>
+	/* the game, a 3DS one in the Large top layout on the Waves border, left where it is and dimmed by one
+	   quad (no scaling, no glass in a game: the performance contract, 4.2) */
+	.game { position: absolute; inset: 0; overflow: hidden;
+		background: repeating-radial-gradient(140% 70% at 50% 130%, rgba(255, 220, 140, 0.16) 0 4%, transparent 4% 9%), linear-gradient(180deg, #e9a62a, #a8660a); }
+	.game .top { position: absolute; left: 160px; top: 150px; width: 1200px; height: 720px; border-radius: 6px;
+		background: radial-gradient(30% 30% at 62% 46%, #e8323a 0 40%, #7a0e14 41% 46%, transparent 47%), radial-gradient(80% 60% at 50% 100%, #2a6e3a, transparent 70%), linear-gradient(180deg, #4a83d8, #14306e); }
+	.game .bottom { position: absolute; left: 1390px; top: 470px; width: 400px; height: 300px; border-radius: 6px; background: linear-gradient(160deg, #0a1840, #24305c); }
+	.scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(3, 5, 10, 0.86) 0 30%, rgba(3, 5, 10, 0.55) 60%, rgba(3, 5, 10, 0.45)); }
+
+	.sheet { position: absolute; left: 48px; top: 48px; width: 640px; height: 984px; border-radius: var(--r-sheet); background: rgba(10, 15, 27, 0.92); border: 1.5px solid rgba(255, 255, 255, 0.12);
+		box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6); padding: 36px 36px 0; }
+	.head { display: flex; gap: 22px; align-items: center; }
+	.head .cv { width: 104px; height: 96px; }
+	.head .t { font: 650 30px/1.15 Lexend; }
+	.head .m { display: flex; align-items: center; gap: 10px; margin-top: 10px; font: 400 19px Lexend; color: var(--text-2); }
+	.paused { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 9px; background: rgba(255, 255, 255, 0.12); font: 600 16px Lexend; letter-spacing: 1px; text-transform: uppercase; }
+	.paused::before { content: ""; width: 8px; height: 12px; border-left: 3px solid var(--text); border-right: 3px solid var(--text); box-sizing: border-box; }
+
+	.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 30px 0 26px; }
+	.qa { height: 118px; border-radius: 18px; background: var(--glass); border: 1.5px solid var(--glass-edge); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font: 500 19px Lexend; color: var(--text-2); }
+	.qa svg { width: 34px; height: 34px; color: var(--text); }
+	.qa.chosen { border: 2px solid var(--n3ds); background: rgba(244, 182, 63, 0.14); color: var(--text); }
+
+	.list { display: flex; flex-direction: column; gap: 6px; }
+	.li { height: 58px; border-radius: 14px; display: flex; align-items: center; padding: 0 20px; font: 500 24px Lexend; color: var(--text); }
+	.li .v { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 21px; }
+	.li .v svg { color: var(--text-3); }
+	.slider { width: 170px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); position: relative; }
+	.slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 80%; border-radius: 4px; background: var(--n3ds); }
+	.slider b { position: absolute; left: calc(80% - 9px); top: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--text); }
+	.sep { height: 1.5px; background: var(--line); margin: 14px 8px; }
+	.li.danger { color: #ffb0b0; }
+	.foot { position: absolute; left: 36px; right: 36px; bottom: 30px; display: flex; gap: 28px; font: 500 20px Lexend; color: var(--text-2); }
+	.foot span { display: flex; align-items: center; gap: 8px; }
+
+	.slots { position: absolute; left: 736px; right: 48px; bottom: 56px; }
+	.slots .overline { margin-bottom: 18px; display: flex; align-items: center; gap: 14px; }
+	.strip { display: flex; gap: 18px; }
+	.slot { width: 212px; }
+	.slot .shot { height: 128px; border-radius: 14px; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.14); position: relative; }
+	.slot .n { font: 600 20px Lexend; margin-top: 12px; }
+	.slot .d { font: 400 18px Lexend; color: var(--text-2); margin-top: 3px; }
+	.slot.focus .shot { box-shadow: 0 0 0 4px var(--ink-0), 0 0 0 8px var(--focus), 0 0 60px rgba(244, 182, 63, 0.35); border-color: transparent; }
+	.slot.empty .shot { border-style: dashed; background: rgba(255, 255, 255, 0.03); display: flex; align-items: center; justify-content: center; color: var(--text-3); font: 500 18px Lexend; }
+	.hold { position: absolute; right: 48px; bottom: 300px; display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-radius: 16px; background: rgba(12, 16, 26, 0.85); border: 1.5px solid var(--glass-edge); font: 500 21px Lexend; }
+	.ring { width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--n3ds) 0 40%, rgba(255, 255, 255, 0.15) 40%); display: flex; align-items: center; justify-content: center; }
+	.ring::after { content: ""; width: 24px; height: 24px; border-radius: 50%; background: #0c101a; }
+</style></head>
+<body><div class="canvas">
+	<div class="game"><div class="top"></div><div class="bottom"></div></div>
+	<div class="scrim"></div>
+
+	<div class="sheet">
+		<div class="head">
+			<div class="cv" data-game="pkx"></div>
+			<div><div class="t">Pokémon X</div><div class="m"><span class="sys n3ds"><i></i>3DS</span><span class="paused">Paused</span>1 h 12 min</div></div>
+		</div>
+		<div class="quick">
+			<div class="qa"><span data-glyph="resume" data-size="34"></span>Resume</div>
+			<div class="qa chosen"><span data-glyph="save" data-size="34"></span>Save state</div>
+			<div class="qa"><span data-glyph="load" data-size="34"></span>Load state</div>
+			<div class="qa"><span data-glyph="screens" data-size="34"></span>Screens</div>
+		</div>
+		<div class="list">
+			<div class="li">Screens and border<span class="v">Large top · Waves<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Graphics<span class="v">6× · No filter<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Speed<span class="v">100%<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Cheats<span class="v">2 on<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Amiibo<span class="v">None<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Controls<span class="v">A on Circle<span data-glyph="chevron" data-size="22"></span></span></div>
+			<div class="li">Volume<span class="v"><span class="slider"><i></i><b></b></span>80%</span></div>
+			<div class="sep"></div>
+			<div class="li danger">Quit to the library<span class="v" style="color:var(--text-3)">Hold <span data-glyph="cross" data-size="22"></span></span></div>
+		</div>
+		<div class="foot"><span><span data-glyph="cross" data-size="24"></span>Choose</span><span><span data-glyph="circle" data-size="24"></span>Back to the game</span></div>
+	</div>
+
+	<div class="hold"><span class="ring"></span>Hold <span data-glyph="cross" data-size="24"></span> to replace slot 2</div>
+
+	<div class="slots">
+		<div class="overline">Save to a slot <span class="dim" style="letter-spacing:1px;text-transform:none;font:400 18px Lexend">Five per game · tied to this app version</span></div>
+		<div class="strip">
+			<div class="slot"><div class="shot" style="background:radial-gradient(30% 34% at 60% 50%,#e8323a 0 40%,transparent 42%),linear-gradient(180deg,#4a83d8,#2a6e3a)"></div><div class="n">Slot 1</div><div class="d">Today 20:41</div></div>
+			<div class="slot focus"><div class="shot" style="background:radial-gradient(60% 50% at 40% 70%,#ffd36b 0 30%,transparent 32%),linear-gradient(180deg,#14306e,#0a1840)"></div><div class="n">Slot 2</div><div class="d">Yesterday 22:10</div></div>
+			<div class="slot"><div class="shot" style="background:linear-gradient(200deg,#7cc0ff,#2a6e3a 70%)"></div><div class="n">Slot 3</div><div class="d">Oct 2 18:03</div></div>
+			<div class="slot empty"><div class="shot">Empty</div><div class="n">Slot 4</div><div class="d">—</div></div>
+			<div class="slot empty"><div class="shot">Empty</div><div class="n">Slot 5</div><div class="d">—</div></div>
+		</div>
+	</div>
+</div></body></html>

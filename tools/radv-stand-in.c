@@ -18,3 +18,18 @@ PFN_vkVoidFunction vk_icdGetInstanceProcAddr(void* instance, const char* name)
 void ps5_fp_ieee(void)
 {
 }
+
+// The platform layer's executable memory (ps5platform/exec.h), which the recompilers' memory and
+// the privilege probe use: none here.
+void* ps5_exec_allocate(size_t bytes, unsigned long anchor)
+{
+	(void)bytes;
+	(void)anchor;
+	return NULL;
+}
+
+int ps5_exec_release(void* base)
+{
+	(void)base;
+	return -1;
+}

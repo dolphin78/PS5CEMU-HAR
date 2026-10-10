@@ -54,7 +54,8 @@ namespace ps5vk
 		vkGetPhysicalDeviceDisplayPropertiesKHR(device, &count, displays.data());
 		const VkDisplayKHR display = displays[0].display;
 
-		// the high refresh rate mode only when the 120 Hz setting is on
+		// 3840x2160 (the driver also offers 2560x1440 and 1920x1080, which VideoOut scales up), at
+		// the high refresh rate only when the 120 Hz setting is on
 		count = 0;
 		vkGetDisplayModePropertiesKHR(device, display, &count, nullptr);
 		std::vector<VkDisplayModePropertiesKHR> modes(count);
@@ -65,15 +66,29 @@ namespace ps5vk
 			return VK_NULL_HANDLE;
 		}
 		const bool highFrameRate = ps5display::HighFrameRate();
-		const VkDisplayModePropertiesKHR* chosen = &modes[0];
+		const auto fullSize = [](const VkDisplayModePropertiesKHR& mode) {
+			return mode.parameters.visibleRegion.width == ps5display::kWidth && mode.parameters.visibleRegion.height == ps5display::kHeight;
+		};
+		const VkDisplayModePropertiesKHR* chosen = nullptr;
 		for (const auto& mode : modes)
 		{
+			if (!fullSize(mode))
+				continue;
+			if (!chosen)
+				chosen = &mode;
 			if ((mode.parameters.refreshRate > 100000) == highFrameRate)
 			{
 				chosen = &mode;
 				break;
 			}
 		}
+		if (!chosen)
+		{
+			error = fmt::format("VideoOut has no {}x{} mode", ps5display::kWidth, ps5display::kHeight);
+			return VK_NULL_HANDLE;
+		}
+		if (highFrameRate && chosen->parameters.refreshRate < 100000)
+			ps5log::Line("[vulkan] 120 Hz output is on, but VideoOut offers 59.94 Hz only (the display or the driver refused 119.88 Hz)");
 
 		// the plane that can show this display
 		uint32_t planeIndex = 0;
@@ -110,6 +125,7 @@ namespace ps5vk
 			error = "cannot create the VideoOut surface (VkResult " + std::to_string((int)result) + ")";
 			return VK_NULL_HANDLE;
 		}
+		ps5display::SetOutputRefresh(chosen->parameters.refreshRate);
 		ps5log::Line("[vulkan] VideoOut surface {}x{} at {:.2f} Hz", width, height, chosen->parameters.refreshRate / 1000.0);
 		return surface;
 	}

@@ -2,10 +2,13 @@
 #include "log.h"
 #include "kernel.h"
 
+#include <cerrno>
 #include <cstdio>
+#include <fcntl.h>
 #include <mutex>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <unistd.h>
 
 namespace
@@ -22,6 +25,47 @@ namespace
 	std::string Older(const std::string& folder, const char* stem, const char* ext, int age)
 	{
 		return age == 1 ? fmt::format("{}/{}.prev{}", folder, stem, ext) : fmt::format("{}/{}.{}{}", folder, stem, age, ext);
+	}
+
+	// stderr's descriptor, which keeps where the title's stderr went: lines that are not the driver's
+	// still go there
+	int s_stderr = -1;
+
+	bool IsDriverMessage(std::string_view line)
+	{
+		return line.starts_with("radv") || line.starts_with("wsi/") || line.starts_with("MESA") || line.starts_with("ACO");
+	}
+
+	void ForwardStderr(int from)
+	{
+		std::string pending;
+		char buffer[4096];
+		for (;;)
+		{
+			const ssize_t got = read(from, buffer, sizeof(buffer));
+			if (got < 0 && errno == EINTR)
+				continue;
+			if (got <= 0)
+				return;
+			pending.append(buffer, (size_t)got);
+			size_t end;
+			while ((end = pending.find('\n')) != std::string::npos)
+			{
+				const std::string_view line(pending.data(), end);
+				// the boot log's line goes to stdout too, so the klog keeps it either way
+				if (IsDriverMessage(line))
+					ps5log::Write(fmt::format("[driver] {}", line));
+				else
+					(void)!write(s_stderr, pending.data(), end + 1);
+				pending.erase(0, end + 1);
+			}
+			// a line with no end yet that will not fit: passed on as it is
+			if (pending.size() > 16 * 1024)
+			{
+				(void)!write(s_stderr, pending.data(), pending.size());
+				pending.clear();
+			}
+		}
 	}
 
 	void Rotate(const std::string& current, const std::string& folder, const char* stem, const char* ext)
@@ -62,6 +106,35 @@ namespace ps5log
 	const char* Path()
 	{
 		return s_path.c_str();
+	}
+
+	void ForwardDriverMessages()
+	{
+		static std::once_flag s_once;
+		std::call_once(s_once, [] {
+			// The stream stderr is moved to the pipe, not descriptor 2: a title may not dup2 (the
+			// console ends the app at the call, 0xA002030A "illegal function call", seen on 13.60;
+			// PS5_PayloadSDK's ps5platform/klog.h moves the stream for the same reason). Everything
+			// written through stderr (the driver's fprintf) arrives; a raw write(2) to descriptor 2
+			// goes where it did.
+			int ends[2];
+			if (pipe(ends) != 0)
+				return;
+			// a writer never waits on the forwarding thread: with the pipe full, its line is lost
+			fcntl(ends[1], F_SETFL, fcntl(ends[1], F_GETFL) | O_NONBLOCK);
+			FILE* stream = fdopen(ends[1], "w");
+			if (!stream)
+			{
+				close(ends[0]);
+				close(ends[1]);
+				return;
+			}
+			setvbuf(stream, nullptr, _IOLBF, 0);
+			std::fflush(stderr);
+			s_stderr = STDERR_FILENO;
+			stderr = stream;
+			std::thread(ForwardStderr, ends[0]).detach();
+		});
 	}
 
 	void Write(std::string_view line)

@@ -3,7 +3,7 @@
 //
 //  1. out of the sandbox: /data, and JIT memory for the recompilers (ps5/privilege.h);
 //  2. the boot log, the DualSense and Cemu's core (settings, MLC, graphic packs, the game scan);
-//  3. the launcher, its start screen and Cemu's and Azahar's sides, until a game is chosen;
+//  3. the launcher until a game is chosen (frontend/shell.h), on the side last used;
 //  4. the game, on Cemu's or Azahar's Vulkan renderer, until the in-game menu (touchpad + Options)
 //     asks for the library, which starts PS5CEMU-HAR over (app/emulator.h, RestartToLibrary) on
 //     that emulator's side.
@@ -16,6 +16,7 @@
 #include "azahar/library.h"
 #include "frontend/launcher.h"
 #include "frontend/settings.h"
+#include "frontend/shell.h"
 #include "ps5/crash.h"
 #include "ps5/display.h"
 #include "ps5/kernel.h"
@@ -50,6 +51,32 @@ namespace
 		return fmt::format("{} ({:#010x})", version.text, version.version);
 	}
 
+	// A diagnostic for SYSTEM_ILLEGAL_FUNCTION_CALL (0xA002030A), which ends the app with no signal for
+	// a crash handler: every import as the console resolved it. With /data/ps5cemu/got-range.txt
+	// ("SELF GOT_START GOT_END", this build's ELF addresses of this function and of .got, in hex), the
+	// .got as loaded goes to logs/got.bin, to be read against the ELF's relocations: an import the
+	// console does not give the app points where the others it lacks do. Nothing without the file.
+	void DumpImports()
+	{
+		FILE* range = std::fopen("/data/ps5cemu/got-range.txt", "rb");
+		if (!range)
+			return;
+		char text[128] = {};
+		(void)!std::fread(text, 1, sizeof(text) - 1, range);
+		std::fclose(range);
+		char* at = text;
+		const uint64_t self = std::strtoull(at, &at, 16), start = std::strtoull(at, &at, 16), end = std::strtoull(at, &at, 16);
+		if (!self || end <= start || end - start > (1u << 20))
+			return;
+		const uintptr_t base = (uintptr_t)&DumpImports - (uintptr_t)self;
+		FILE* out = std::fopen("/data/ps5cemu/logs/got.bin", "wb");
+		if (!out)
+			return;
+		std::fwrite((const void*)(uintptr_t)(start + base), 1, (size_t)(end - start), out);
+		std::fclose(out);
+		ps5log::Line("[diag] imports: {} slots in logs/got.bin, the eboot {:#x} above its ELF", (end - start) / 8, base);
+	}
+
 	std::vector<std::string> Diagnostics(const ps5privilege::Result& privileges)
 	{
 		return {
@@ -75,6 +102,21 @@ namespace
 		settings.launchError = launchError;
 		ps5settings::Save(settings);
 	}
+
+	// The 119.88 Hz mode for the next game, where the setting asks for it. The driver configures
+	// VideoOut once a process, when a renderer first asks for the display's modes, and offers 119.88
+	// Hz only to a title whose param.json declares high-frame-rate output. It reads /app0's unless
+	// PS5_VIDEOOUT_PARAM_JSON names another, and a process the HEN has jailbroken has no /app0
+	// (app/paths.h), so it is told where the app's is; with the setting off it is told of one that
+	// is not there, which declares nothing, so the display stays at 59.94 Hz in a sandboxed process too.
+	void SetHighFrameRate(bool highFrameRate)
+	{
+		ps5display::SetHighFrameRate(highFrameRate);
+		const std::string paramJson = ps5paths::AppDir() + (highFrameRate ? "/sce_sys/param.json" : "/sce_sys/no-high-frame-rate.json");
+		setenv("PS5_VIDEOOUT_PARAM_JSON", paramJson.c_str(), 1);
+		// the new launcher opened VideoOut through the driver at 59.94 Hz: the game's rate asked for again
+		ps5display::ConfigureOutput(highFrameRate);
+	}
 }
 
 // What Cemu's src/main.cpp defines for the rest of Cemu.
@@ -91,6 +133,14 @@ int main(int argc, char* argv[])
 		ps5log::Open(ps5paths::kLogs);
 	ps5log::Line("[main] firmware {}", Firmware());
 	ps5log::Line("[main] {}", privileges.summary);
+	{
+		bool image = false;
+		const std::string source = ps5paths::MountSource(&image);
+		ps5log::Line("[main] app folder {}{}", ps5paths::AppDir(),
+			!source.empty() ? fmt::format(" (mounted from {})", source) : image ? " (mounted from an image)" : "");
+	}
+	if (privileges.filesystem)
+		DumpImports();
 	ps5crash::Install(); // Cemu's own replaces it, in a session Cemu runs in
 	{
 		// how the console starts the CPU's floating point: desktop systems keep denormals (0x1f80);
@@ -110,6 +160,7 @@ int main(int argc, char* argv[])
 	if (privileges.filesystem)
 		ps5privilege::ReachFolders({settings.gamesFolder, settings.n3ds.gamesFolder});
 	ps5threads::SetPinning(settings.pinCpuThreads);
+	ps5log::ForwardDriverMessages();
 	// before either emulator's Vulkan driver starts, which reads it once
 	if (!settings.radvDebug.empty())
 	{
@@ -117,6 +168,19 @@ int main(int argc, char* argv[])
 		ps5log::Line("[vulkan] RADV_DEBUG={} (radvDebug in ps5cemu.json)", settings.radvDebug);
 	}
 	ps5stream::Configure(settings.gamePadStream);
+	for (const auto& [name, value] : settings.radvEnvironment)
+	{
+		// the driver's own variables only: the rest of the environment is the app's
+		const bool driver = name.rfind("RADV_", 0) == 0 || name.rfind("MESA_", 0) == 0 || name.rfind("ACO_", 0) == 0;
+		if (!driver || name == "RADV_DEBUG")
+		{
+			ps5log::Line("[vulkan] {} in radvEnvironment left out: only RADV_, MESA_ and ACO_ names, and radvDebug for RADV_DEBUG", name);
+			continue;
+		}
+		setenv(name.c_str(), value.c_str(), 1);
+		ps5log::Line("[vulkan] {}={} (radvEnvironment in ps5cemu.json)", name, value);
+	}
+	ps5emu::SetSubmitDraws(settings.cemuSubmitDraws);
 	ps5pad::Init();
 	ps5pad::SetVibrationEnabled(settings.rumble);
 	ps5window::Initialize();
@@ -184,13 +248,18 @@ int main(int argc, char* argv[])
 		ps5update::Start();
 	for (;;)
 	{
-		ps5display::SetHighFrameRate(false); // the launcher at 59.94 Hz
-		const auto choice = ps5launcher::Run(settings, status, prepare);
+		SetHighFrameRate(false); // the launcher at 59.94 Hz
+		ps5display::SetFramePacing(1); // and the 3DS's games every refresh
+		std::optional<ps5launcher::Choice> choice;
+		const ps5shell::Outcome outcome = ps5shell::Run(settings, status, prepare, choice);
 		ps5update::Stop(); // nothing of the launcher's runs beside a game
 		ps5packs::Stop();
-		if (!choice)
+		if (outcome != ps5shell::Outcome::Chosen || !choice)
 		{
-			// nothing to show it on: wait for the player to close the app from the PS5's menu
+			// the launcher could not draw, and there is nothing else to show: the boot log says why. Wait
+			// for the player to close the app from the PS5's menu
+			ps5log::Line("[main] the launcher could not start or stopped drawing");
+			ps5notify::Send("The launcher could not start. The boot log in /data/ps5cemu/logs says why.");
 			for (;;)
 				sceKernelUsleep(1000000);
 		}
@@ -198,6 +267,9 @@ int main(int argc, char* argv[])
 
 		if (choice->system == ps5launcher::System::N3ds)
 		{
+			// VideoOut configured again once the new launcher's surface is gone, as before Cemu's below:
+			// Azahar's surface follows on the output the launcher presented on, at 59.94 Hz
+			SetHighFrameRate(false);
 			if (ps5azahar::LaunchGame(game, settings.n3ds, error))
 			{
 				ps5azahar::RunGame();
@@ -219,7 +291,8 @@ int main(int argc, char* argv[])
 		}
 
 		ps5emu::ApplyOptions(Options(settings));
-		ps5display::SetHighFrameRate(settings.highFrameRate);
+		SetHighFrameRate(settings.highFrameRate);
+		ps5display::SetFramePacing(settings.framePacing);
 		ps5window::Initialize();
 		if (ps5emu::LaunchGame(game, error))
 		{

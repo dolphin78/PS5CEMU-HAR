@@ -59,6 +59,7 @@
 #include "video_core/gpu.h"
 #include "video_core/rasterizer_interface.h"
 #include "video_core/renderer_base.h"
+#include "video_core/shader/generator/glsl_shader_gen.h"
 
 #include <atomic>
 #include <chrono>
@@ -207,7 +208,8 @@ namespace ps5azahar
 				char text[32] = "saved";
 				if (const std::tm* local = std::localtime(&time))
 					std::strftime(text, sizeof(text), "%b %d, %H:%M", local);
-				times[info.slot - 1] = info.status == Core::SaveStateInfo::ValidationStatus::OK ? text : "another version's";
+				// an earlier build's state of the same format loads too (Azahar patch 0011)
+				times[info.slot - 1] = info.status != Core::SaveStateInfo::ValidationStatus::BuildMismatch ? text : "another version's";
 			}
 			ps5ingame3ds::SetStateSlots(times);
 		}
@@ -410,6 +412,11 @@ namespace ps5azahar
 			if (!values.use_cpu_jit.GetValue())
 				ps5log::Line("[azahar] no executable direct memory: the 3DS CPU runs on Azahar's interpreter");
 			values.cpu_clock_percentage = std::clamp(settings.cpuClock, 25, 400);
+			// every vertex position computed invariantly, as Azahar does on Apple GPUs (patch 0010):
+			// for Pokemon X's moving black stipples (#23)
+			Pica::Shader::Generator::GLSL::g_ps5InvariantPosition = settings.invariantPosition;
+			if (settings.invariantPosition)
+				ps5log::Line("[azahar] vertex positions invariant (n3ds.invariantPosition)");
 			values.is_new_3ds = true;
 			// automatic (-1) takes the game's own region; a game made for another one may refuse to
 			// start or show other languages (#17)
@@ -561,7 +568,7 @@ namespace ps5azahar
 		{
 			ps5ingame3ds::Record({target.instance, target.physical_device, target.device, target.queue_family, target.queue,
 				target.render_pass, target.image_count, target.command_buffer, target.width, target.height,
-				target.inside_render_pass});
+				target.inside_render_pass, target.generation});
 		}
 
 		void Emulate()

@@ -11,14 +11,16 @@
 # tools/package.sh converts into eboot.bin.
 #
 # RADV and the SDK fork it was built with (tools/build-radv.sh): RADV_ARCHIVE and RADV_SDK, by
-# default PS5_Vulkan's release build in .deps/PS5_Vulkan/.deps/native. Without them, the link
-# fails, unless PS5CEMU_LINK_CHECK=1: then a stand-in that has no GPU takes RADV's place, which
-# checks that everything else links, and OUTPUT.linkcheck marks the result as not an app.
+# default the build with patches/mesa in .deps/PS5_Vulkan/.deps/native/radv-ps5cemu and the SDK
+# PS5_Vulkan's recipe set up. OUTPUT.radv names the archive linked (env.sh's ps5cemu_radv_stamp).
+# Without them, the link fails, unless PS5CEMU_LINK_CHECK=1: then a stand-in that has no GPU takes
+# RADV's place, which checks that everything else links, and OUTPUT.linkcheck marks the result as
+# not an app.
 
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/env.sh"
 vulkan=$PS5CEMU_ROOT/.deps/PS5_Vulkan
-radv_archive=${RADV_ARCHIVE:-$vulkan/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a}
+radv_archive=$PS5CEMU_RADV_ARCHIVE
 radv_sdk=${RADV_SDK:-$vulkan/.deps/native/ps5-payload-sdk}
 work=$PS5CEMU_BUILD/link
 output=$1
@@ -130,5 +132,8 @@ done
     "$sdk/target/lib/libc.a" # what no module exports to a title and the platform layer does not bind (as ProsperoEden links)
 if ((check)); then
     touch "$output.linkcheck"
+    rm -f "$output.radv"
+else
+    ps5cemu_radv_stamp >"$output.radv"
 fi
 echo "==> [link] $output ($(stat -c %s "$output") bytes)"

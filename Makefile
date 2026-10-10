@@ -9,7 +9,7 @@ SHELL := /bin/bash
 MAKEFLAGS += --no-print-directory
 
 # The release's version, set here only: port/CMakeLists.txt and tools/package.sh (param.json) read it
-VERSION := 3.0.0
+VERSION := 3.5.0
 APP := build/app/PPSA99360
 JOBS ?= $(shell nproc)
 export JOBS
@@ -23,6 +23,8 @@ help: ## List the targets
 	@echo
 	@echo 'Variables:'
 	@echo '  JOBS=$(JOBS)                parallel compile jobs'
+	@echo '  RADV_PATCHES=0006           the driver patches (patches/mesa) RADV is built with: their numbers,'
+	@echo '                              all, or empty for none (0006: 120 Hz output after the new launcher)'
 	@echo '  RADV_ARCHIVE, RADV_SDK      a RADV built elsewhere, and the SDK fork it was built with'
 
 deps: ## Fetch the pinned inputs and build the libraries Cemu needs for the PS5
@@ -32,7 +34,7 @@ deps: ## Fetch the pinned inputs and build the libraries Cemu needs for the PS5
 deps-status: ## Show every dependency and whether it matches its pin
 	@python3 -B tools/deps.py status
 
-radv: deps ## Build RADV, the Vulkan driver, with PS5_Vulkan's recipe
+radv: deps ## Build RADV, the Vulkan driver, with PS5_Vulkan's recipe and patches/mesa (RADV_PATCHES)
 	bash tools/build-radv.sh
 
 azahar: deps ## Build Azahar's core (the 3DS side) and its PS5 frontend: build/azahar

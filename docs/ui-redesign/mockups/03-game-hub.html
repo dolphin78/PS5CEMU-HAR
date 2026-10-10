@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Game hub</title>
+<link rel="stylesheet" href="tokens.css"><script src="kit.js"></script>
+<style>
+	.ambient { background:
+		radial-gradient(55% 75% at 18% 45%, rgba(26, 128, 140, 0.55), transparent 70%),
+		radial-gradient(45% 50% at 85% 10%, rgba(154, 211, 168, 0.14), transparent 70%),
+		linear-gradient(180deg, #06161f 0%, #05070d 100%); }
+	/* on the hub the boot screen is atmosphere: full-bleed, softened and dimmed; the cover leads */
+	.boot { position: absolute; left: -30px; top: -20px; width: 1980px; height: 1114px; filter: blur(5px) saturate(1.05); }
+	.scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5, 7, 13, 0.62), rgba(5, 7, 13, 0.80) 45%, rgba(5, 7, 13, 0.84)),
+		linear-gradient(180deg, rgba(5, 7, 13, 0.2), rgba(5, 7, 13, 0) 40%, rgba(5, 7, 13, 0.9)); }
+	.hero-cover { position: absolute; left: var(--safe-x); top: 150px; width: 420px; height: 588px; border-radius: 22px; box-shadow: 0 40px 90px rgba(0,0,0,.6), 0 0 160px rgba(154,211,168,.18) !important; }
+	.reflect { position: absolute; left: 120px; top: 726px; width: 400px; height: 140px; transform: scaleY(-1); opacity: 0.16; filter: blur(2px);
+		-webkit-mask-image: linear-gradient(0deg, #000, transparent 75%); border-radius: 22px; }
+	.peek { position: absolute; top: 300px; height: 280px; width: 200px; opacity: 0.35; filter: saturate(0.7); }
+	.peek.l { left: -176px; } .peek.r { right: -176px; }
+	.nav { position: absolute; top: 52px; display: flex; align-items: center; gap: 10px; font: 500 20px Lexend; color: var(--text-3); }
+	.nav.l { left: var(--safe-x); } .nav.r { right: var(--safe-x); }
+
+	.info { position: absolute; left: 596px; top: 150px; width: 1228px; }
+	.kicker { display: flex; align-items: center; gap: 16px; }
+	h1 { font: 700 64px/1.06 Lexend; letter-spacing: -1px; margin: 18px 0 20px; }
+	.chips { display: flex; gap: 10px; }
+	.actions { display: flex; gap: 18px; margin-top: 34px; }
+	.cols { display: flex; gap: 48px; margin-top: 52px; }
+	.about { width: 640px; }
+	.about p { font: 400 24px/1.6 Lexend; color: var(--text-2); }
+	.about p + p { margin-top: 14px; }
+	.about .clip { max-height: 230px; overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent); }
+	.facts { width: 540px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px 28px; align-content: start; }
+	.fact .k { font: 500 18px Lexend; color: var(--text-3); letter-spacing: 0.5px; }
+	.fact .v { font: 500 24px Lexend; margin-top: 6px; }
+	.run { margin-top: 30px; grid-column: span 2; padding: 22px 24px; border-radius: var(--r-card); background: rgba(61, 214, 163, 0.08); border: 1.5px solid rgba(61, 214, 163, 0.22); }
+	.run .h { display: flex; align-items: center; gap: 12px; font: 600 22px Lexend; color: #8ff0cf; }
+	.run .t { font: 400 20px/1.5 Lexend; color: var(--text-2); margin-top: 8px; }
+	.overline.sec { margin-bottom: 16px; }
+</style></head>
+<body><div class="canvas">
+	<div class="ambient"></div>
+	<canvas class="boot" data-backdrop="boot:botw"></canvas>
+	<div class="scrim"></div>
+	<div class="grain"></div><div class="vignette"></div>
+
+	<div class="peek l" data-game="bayo2"></div><div class="peek r" data-game="toad"></div>
+	<div class="nav l"><span data-glyph="l1" data-size="30"></span>Bayonetta 2</div>
+	<div class="nav r">Captain Toad<span data-glyph="r1" data-size="30"></span></div>
+
+	<div class="hero-cover focusless" data-game="botw"></div>
+
+	<div class="info">
+		<div class="kicker"><span class="sys wiiu"><i></i>Wii U</span><span class="overline">ALZE01 · NTSC-U · 00050000101C9400</span></div>
+		<h1>The Legend of Zelda:<br>Breath of the Wild</h1>
+		<div class="chips">
+			<span class="chip good"><span class="dot" style="background:var(--good)"></span>Playable</span>
+			<span class="chip">Update v208</span><span class="chip">DLC</span><span class="chip">WUA</span><span class="chip">41 h played</span>
+		</div>
+		<div class="actions">
+			<span class="btn primary focus"><span data-glyph="play" data-size="26"></span>Play</span>
+			<span class="btn">Graphic packs<span class="chip" style="height:32px;font-size:18px">3 on</span></span>
+			<span class="btn"><span data-glyph="gear" data-size="28"></span>Game settings</span>
+			<span class="btn icon"><span data-glyph="more" data-size="30"></span></span>
+		</div>
+		<div class="cols">
+			<div class="about">
+				<div class="overline sec">About</div>
+				<div class="clip">
+					<p>Forget everything you know about The Legend of Zelda games. Step into a world of discovery, exploration and adventure in The Legend of Zelda: Breath of the Wild, a boundary-breaking new game in the acclaimed series.</p>
+					<p>Travel across fields, through forests and to mountain peaks as you discover what has become of the ruined kingdom of Hyrule in this stunning open-air adventure.</p>
+				</div>
+			</div>
+			<div class="facts">
+				<div class="fact"><div class="k">Developer</div><div class="v">Nintendo</div></div>
+				<div class="fact"><div class="k">Released</div><div class="v">March 3, 2017</div></div>
+				<div class="fact"><div class="k">Genre</div><div class="v">Action, Adventure</div></div>
+				<div class="fact"><div class="k">Rating</div><div class="v">ESRB E10+</div></div>
+				<div class="run">
+					<div class="h"><span data-glyph="check" data-size="24"></span>Runs well on PS5</div>
+					<div class="t">Your last session averaged 29.8 fps. The compatibility list has it as playable from start to end.</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="hints">
+		<span class="hint"><span data-glyph="cross"></span>Play</span>
+		<span class="hint"><span data-glyph="options"></span>Options</span>
+		<span class="hint"><span data-glyph="updown"></span>Scroll</span>
+		<span class="hint"><span data-glyph="circle"></span>Back</span>
+	</div>
+</div></body></html>

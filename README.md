@@ -30,6 +30,13 @@ or Sony. All credit for the emulators goes to their developers.
 
 ## Install
 
+> [!NOTE]
+> **First, can your PS5 run homebrew?** That depends on your firmware, not on this app: a jailbroken
+> console on a firmware the scene has an exploit for (as of late 2026, every firmware up to
+> **13.60**, disc or digital, with **14.00+** not yet cracked). Once your console loads **etaHEN,
+> OnionHEN, or just an ELF loader on port 9021**, PS5CEMU-HAR runs. The
+> [firmware and setup guide](docs/HEN-SETUP.md) has the full picture, per firmware and per HEN.
+
 1. Download [PS5CEMU-HAR-v3.0.0.zip](https://github.com/premohq/PS5CEMU-HAR/raw/releases/PS5CEMU-HAR-v3.0.0.zip)
    ([release notes](https://github.com/premohq/PS5CEMU-HAR/releases/tag/v3.0.0), [all releases](https://github.com/premohq/PS5CEMU-HAR/releases)) and extract it, or
    [build it yourself](docs/BUILDING.md).
@@ -42,8 +49,8 @@ or Sony. All credit for the emulators goes to their developers.
      `/data` itself with its bundled helper.
 
    No HEN has to grant JIT memory: the recompilers make their own when it isn't granted. The
-   [HEN setup guide](docs/HEN-SETUP.md) has the details, and **Settings > Diagnostics** shows what
-   the app got.
+   [firmware and setup guide](docs/HEN-SETUP.md) has the details for every firmware and HEN, and
+   **Settings > Diagnostics** shows what the app got.
 4. Add your games (see [Game files](#game-files)).
 5. Start PS5CEMU-HAR from the home screen, pick an emulator and open the Library.
 
@@ -83,7 +90,8 @@ Both launchers have:
 ## Wii U (Cemu)
 
 - Cemu's x64 recompiler, at the PS5's 3840x2160 output, with a choice of upscaling filter (Bicubic
-  by default) and 120 Hz on displays that support it.
+  by default), 120 Hz on displays that support it, and frame pacing (**Settings > Video**, or the
+  in-game menu's Graphics) that holds a game to an even 60 fps at 120 Hz or 30 fps at 60 Hz.
 - Plays WUA, WUD/WUX and unpacked games from any folder the PS5 can read.
 - The Cemu community graphic packs, organized by folder like Cemu's Graphic Packs window, with a
   dropdown for each preset.
@@ -164,12 +172,16 @@ software you own, and don't download or share them.
 | Touchpad click + L1 | Swap the screens |
 | Touchpad click + R1 | Next screen layout |
 
-The in-game menu opens on the left with the game's box art and details. Up and Down move, Right or
-Cross opens a category, Left and Right change a setting, and Circle closes a category or goes back to
-the game. Changes are kept for your next games. A 3DS game pauses while its menu is open.
+The in-game menu opens on the left in the launcher's look: the game's cover and badges, four quick
+actions along the top, then the settings, each category showing its current value. Up and Down
+move (past the list's top onto the quick actions), Right or Cross opens a category, Left and Right
+change a setting, and Circle closes a category or goes back to the game. Changes are kept for your
+next games. A 3DS game pauses while its menu is open.
 
-- **Both:** screens, picture, volume, controls, the performance overlay, and **Back to the library**
-  (press Cross twice; unsaved progress is lost).
+- **Quick actions:** Wii U: Resume, Screens (swap TV and GamePad), Graphic packs, Amiibo. 3DS:
+  Resume, Save state, Load state, Screens (next layout).
+- **Both:** screens, picture, volume, controls, the performance overlay, and **Quit to the library**
+  (hold Cross until the ring fills; unsaved progress is lost).
 - **Wii U:** **Amiibo**, and a **Graphics** page with Cemu's **Accurate barriers** (on by default;
   off can be faster, but some games flicker) and **Async shader compile** (on by default; off waits
   for each new shader: stutter, but nothing drawn wrong).
@@ -189,7 +201,7 @@ the game. Changes are kept for your next games. A 3DS game pauses while its menu
   `infinity` or `dimensions`, then in the game open the in-game menu's **USB devices**: Left and Right
   put the next figure on a slot, and **Empty** takes it off. The game saves its progress into the dump,
   as it would on the toy. A real portal plugged into the PS5 isn't supported.
-- **Save states (3DS).** Five slots per game; loading asks twice. Save states are tied to the app
+- **Save states (3DS).** Five slots per game; loading is held (hold Cross until the ring fills). Save states are tied to the app
   version that made them, so keep saving in the game too.
 - **Cheats (3DS).** Put a game's cheats in `/data/ps5cemu/azahar/cheats/<title ID>.txt` (16 hex
   digits, shown in the in-game menu), in the Gateway format desktop Azahar uses, and turn them on and
@@ -358,11 +370,12 @@ a ZIP to `dist/`. See [docs/BUILDING.md](docs/BUILDING.md), or run `make help` f
 - `port/`: the PS5 platform layer, both emulators' PS5 frontends, the launcher and the in-game menus
 - `patches/`: changes to Cemu and Azahar
 - `tools/`: build, packaging and artwork scripts
-- `docs/`: building, the HEN setup guide and the compatibility list
+- `docs/`: building, the firmware and HEN setup guide, the compatibility list, and the
+  [UI design](docs/UI-REDESIGN.md) the launcher and in-game menus are moving to
 
 ## Remote touch screen
 
-In **Settings > Remote touch screen**, turn **Remote touch screen** on. Connect your phone, tablet or other
+In **Settings > General > Display**, turn **Remote touch screen** on. Connect your phone, tablet or other
 touchscreen device to the same local network as the PS5, then scan the QR code or open the
 displayed `http://<PS5 IP>:<port>/` link in its browser. Start a game and the page shows the
 Wii U GamePad screen or the 3DS bottom screen, including when that screen is hidden on the TV.

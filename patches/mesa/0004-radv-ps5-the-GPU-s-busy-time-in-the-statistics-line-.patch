@@ -1,0 +1,241 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Mon, 5 Oct 2026 21:32:06 +0000
+Subject: [PATCH] radv/ps5: the GPU's busy time in the statistics line
+ (RADV_PS5_GPU_TIME=1)
+
+Whether a title is limited by the GPU or by what feeds it decides what
+to change for it, and nothing measured it: the statistics line has the
+CPU's side of submitting only.
+
+With RADV_PS5_GPU_TIME=1, each submission's first part starts, after its
+preamble, with a COPY_DATA of the GPU clock (RADV's top-of-pipe timestamp)
+and its last part ends, before the completion, with a bottom-of-pipe
+timestamp (the packet radv_ps5_read_gpu_clock submits). A retired
+submission adds its span, less what overlapped the one before, to the
+window, and the line gains gpu_busy_pct: the share of the 10 s the GPU
+spent running submissions. Each in-flight submission has a slot
+(seq % RADV_PS5_MAX_IN_FLIGHT) in a 64 KiB buffer, read when it retires.
+
+Off by default, and then planning and copying are as before: the option
+adds 14 words and two writes to every submission.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VwQbTVomEg8vnnGcSRXLMp
+---
+ src/amd/vulkan/winsys/ps5/radv_ps5_cs.c     | 114 ++++++++++++++++++--
+ src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h |   9 ++
+ 2 files changed, 113 insertions(+), 10 deletions(-)
+
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+index c603ef0..a04d832 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+@@ -13,6 +13,7 @@
+ 
+ #include "util/os_time.h"
+ #include "util/u_atomic.h"
++#include "util/u_debug.h"
+ #include "util/u_math.h"
+ #include "sid.h"
+ 
+@@ -386,6 +387,54 @@ radv_ps5_read_gpu_clock(void)
+    return clock;
+ }
+ 
++/* GPU time (RADV_PS5_GPU_TIME=1): a submission's first part starts, after its
++ * preamble, with a COPY_DATA of the GPU clock (RADV's top-of-pipe timestamp)
++ * and its last part ends, before the completion, with a bottom-of-pipe
++ * timestamp (the GPU clock's own submission, radv_ps5_read_gpu_clock). The
++ * statistics line then says how much of the window the GPU spent running
++ * submissions: near all of it, the GPU limits the title; well under, what
++ * feeds it does. Off by default: it adds 14 words and two writes to every
++ * submission. */
++#define RADV_PS5_GPU_TIME_START_WORDS 6
++#define RADV_PS5_GPU_TIME_END_WORDS 8
++/* The GPU clock's rate (the 100 MHz timestamp counter, V0-query). */
++#define RADV_PS5_GPU_CLOCK_NS 10
++
++static bool
++radv_ps5_gpu_time_enabled(struct radv_ps5_queue *queue)
++{
++   if (queue->gpu_time_state == 0) {
++      queue->gpu_time_state = -1;
++      if (debug_get_bool_option("RADV_PS5_GPU_TIME", false) &&
++          radv_ps5_memory_alloc((uint64_t)RADV_PS5_MAX_IN_FLIGHT * 2 * sizeof(uint64_t), RADV_PS5_PAGE_BYTES, false,
++                                &queue->gpu_time))
++         queue->gpu_time_state = 1;
++   }
++   return queue->gpu_time_state > 0;
++}
++
++static volatile uint64_t *
++radv_ps5_gpu_time_slot(struct radv_ps5_queue *queue, uint64_t seq)
++{
++   return (volatile uint64_t *)queue->gpu_time.cpu + 2 * (seq % RADV_PS5_MAX_IN_FLIGHT);
++}
++
++/* A retired submission's GPU time, less what overlapped the one before (the
++ * command processor reaches a submission while the last one still drains). */
++static void
++radv_ps5_gpu_time_retire(struct radv_ps5_queue *queue, uint64_t seq)
++{
++   volatile uint64_t *const slot = radv_ps5_gpu_time_slot(queue, seq);
++   radv_ps5_cpu_flush((const void *)slot, 2 * sizeof(uint64_t));
++   const uint64_t start = slot[0], end = slot[1];
++   if (start == UINT64_MAX || end == UINT64_MAX || end < start)
++      return;
++   const uint64_t from = MAX2(start, queue->gpu_last_end);
++   if (end > from)
++      queue->gpu_busy_ticks += end - from;
++   queue->gpu_last_end = MAX2(queue->gpu_last_end, end);
++}
++
+ /* Forgets the ring records the GPU has finished with. Called with the submit
+  * lock held. */
+ static void
+@@ -396,6 +445,8 @@ radv_ps5_queue_retire(struct radv_ps5_queue *queue)
+       struct radv_ps5_in_flight *const oldest = &queue->in_flight[queue->in_flight_first];
+       if (oldest->seq > completed)
+          break;
++      if (queue->gpu_time_state > 0)
++         radv_ps5_gpu_time_retire(queue, oldest->seq);
+       radv_ps5_memory_free(&oldest->dedicated);
+       queue->in_flight_first = (queue->in_flight_first + 1) % RADV_PS5_MAX_IN_FLIGHT;
+       queue->in_flight_count--;
+@@ -554,7 +605,7 @@ static struct {
+ } radv_ps5_submit_window;
+ 
+ static void
+-radv_ps5_note_submission(uint32_t words, uint64_t claim_ticks, uint64_t copy_ticks)
++radv_ps5_note_submission(struct radv_ps5_queue *queue, uint32_t words, uint64_t claim_ticks, uint64_t copy_ticks)
+ {
+    if (!radv_ps5_submit_window.start_ns) {
+       radv_ps5_submit_window.start_ns = os_time_get_nano();
+@@ -574,12 +625,19 @@ radv_ps5_note_submission(uint32_t words, uint64_t claim_ticks, uint64_t copy_tic
+    const double ms_per_tick = ticks ? (double)(now - radv_ps5_submit_window.start_ns) / 1e6 / (double)ticks : 0.0;
+    uint64_t times[3];
+    radv_ps5_submit_times(times);
++   char gpu[32] = "";
++   if (queue->gpu_time_state > 0) {
++      snprintf(gpu, sizeof(gpu), " gpu_busy_pct=%.0f",
++               100.0 * (double)(queue->gpu_busy_ticks * RADV_PS5_GPU_CLOCK_NS) /
++                  (double)(now - radv_ps5_submit_window.start_ns));
++      queue->gpu_busy_ticks = 0;
++   }
+    fprintf(stderr,
+            "radv/ps5 submissions: window count=%" PRIu64 " kwords=%" PRIu64 " claim_ms=%.1f copy_ms=%.1f flush_ms=%.1f"
+-           " agc_ms=%.1f suspend_ms=%.1f\n",
++           " agc_ms=%.1f suspend_ms=%.1f%s\n",
+            radv_ps5_submit_window.count, radv_ps5_submit_window.words / 1024,
+            radv_ps5_submit_window.claim_ticks * ms_per_tick, radv_ps5_submit_window.copy_ticks * ms_per_tick,
+-           times[0] * ms_per_tick, times[1] * ms_per_tick, times[2] * ms_per_tick);
++           times[0] * ms_per_tick, times[1] * ms_per_tick, times[2] * ms_per_tick, gpu);
+    memset(&radv_ps5_submit_window, 0, sizeof(radv_ps5_submit_window));
+    radv_ps5_submit_window.start_ns = now;
+    radv_ps5_submit_window.start_ticks = now_ticks;
+@@ -660,19 +718,24 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+    }
+ 
+    /* Plan: which unit starts each AGC submission, and the words in all. */
++   const bool gpu_time = radv_ps5_gpu_time_enabled(queue);
++   const uint32_t start_words = gpu_time ? RADV_PS5_GPU_TIME_START_WORDS : 0;
++   const uint32_t end_words = gpu_time ? RADV_PS5_GPU_TIME_END_WORDS : 0;
+    const unsigned unit_count = util_dynarray_num_elements(&units, struct radv_ps5_unit);
+-   const uint32_t room = RADV_PS5_SUBMIT_MAX_DW - RADV_PS5_COMPLETION_WORDS;
+-   uint32_t count = preamble_words + RADV_PS5_COMPLETION_WORDS;
+-   uint32_t fill = preamble_words;
++   const uint32_t room = RADV_PS5_SUBMIT_MAX_DW - RADV_PS5_COMPLETION_WORDS - end_words;
++   uint32_t count = preamble_words + start_words + end_words + RADV_PS5_COMPLETION_WORDS;
++   uint32_t fill = preamble_words + start_words;
++   /* What a part holds before its first unit. */
++   uint32_t empty = fill;
+    bool too_large = false;
+    for (unsigned u = 0; u < unit_count; u++) {
+       struct radv_ps5_unit *const unit = util_dynarray_element(&units, struct radv_ps5_unit, u);
+-      if (preamble_words + unit->words > room)
++      if (preamble_words + start_words + unit->words > room)
+          too_large = true;
+-      if (fill > preamble_words && fill + unit->words > room) {
++      if (fill > empty && fill + unit->words > room) {
+          unit->starts_part = true;
+          count += preamble_words;
+-         fill = preamble_words;
++         fill = empty = preamble_words;
+       }
+       fill += unit->words;
+       count += unit->words;
+@@ -695,6 +758,23 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+    util_dynarray_init(&starts, NULL);
+    util_dynarray_append(&starts, 0u);
+    uint32_t *at = radv_ps5_copy_streams(words, submit->initial_preamble_cs, submit->initial_preamble_count);
++   uint64_t gpu_time_va = 0;
++   if (gpu_time) {
++      volatile uint64_t *const slot = radv_ps5_gpu_time_slot(queue, seq);
++      slot[0] = slot[1] = UINT64_MAX;
++      radv_ps5_cpu_flush((const void *)slot, 2 * sizeof(uint64_t));
++      gpu_time_va = (uint64_t)(uintptr_t)slot;
++      const uint32_t start_stamp[RADV_PS5_GPU_TIME_START_WORDS] = {
++         PKT3(PKT3_COPY_DATA, 4, 0),
++         COPY_DATA_SRC_SEL(COPY_DATA_TIMESTAMP) | COPY_DATA_DST_SEL(COPY_DATA_DST_MEM) | COPY_DATA_WR_CONFIRM |
++            COPY_DATA_COUNT_SEL,
++         0,
++         0,
++         (uint32_t)gpu_time_va,
++         (uint32_t)(gpu_time_va >> 32),
++      };
++      at = radv_ps5_stream_words(at, start_stamp, RADV_PS5_GPU_TIME_START_WORDS);
++   }
+    for (unsigned u = 0; u < unit_count; u++) {
+       const struct radv_ps5_unit *const unit = util_dynarray_element(&units, struct radv_ps5_unit, u);
+       if (unit->starts_part) {
+@@ -708,6 +788,20 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+          at = radv_ps5_stream_words(at, piece->words, piece->cdw);
+       }
+    }
++   if (gpu_time) {
++      const uint64_t end_va = gpu_time_va + sizeof(uint64_t);
++      const uint32_t end_stamp[RADV_PS5_GPU_TIME_END_WORDS] = {
++         PKT3(PKT3_RELEASE_MEM, 6, 0),
++         EVENT_TYPE(V_028A90_BOTTOM_OF_PIPE_TS) | EVENT_INDEX(5),
++         EOP_DATA_SEL(EOP_DATA_SEL_TIMESTAMP),
++         (uint32_t)end_va,
++         (uint32_t)(end_va >> 32),
++         0,
++         0,
++         0,
++      };
++      at = radv_ps5_stream_words(at, end_stamp, RADV_PS5_GPU_TIME_END_WORDS);
++   }
+    uint32_t completion[RADV_PS5_COMPLETION_WORDS];
+    radv_ps5_completion_words(completion, (uint64_t)(uintptr_t)queue->marker, (uint32_t)seq);
+    at = radv_ps5_stream_words(at, completion, RADV_PS5_COMPLETION_WORDS);
+@@ -725,7 +819,7 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+       submitted = radv_ps5_submit(words + start, end - start, RADV_PS5_STREAMED_COPY, queue->marker, (uint32_t)seq);
+    }
+    util_dynarray_fini(&starts);
+-   radv_ps5_note_submission(count, copy_start - claim_start, copy_end - copy_start);
++   radv_ps5_note_submission(queue, count, copy_start - claim_start, copy_end - copy_start);
+    simple_mtx_unlock(&queue->submit_lock);
+    if (submitted != 0) {
+       fprintf(stderr, "radv/ps5: sceAgcDriverSubmitDcb failed: 0x%08x\n", (unsigned)submitted);
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
+index fa7ecd2..3a8a0bf 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
+@@ -66,6 +66,15 @@ struct radv_ps5_queue {
+    /* Waiters for a sync object to be submitted for signalling. */
+    mtx_t sync_lock;
+    cnd_t sync_cond;
++
++   /* GPU time (RADV_PS5_GPU_TIME=1, radv_ps5_cs.c), under submit_lock: 0 not
++    * yet decided, 1 on, -1 off; each in-flight submission's start and end
++    * GPU clock in its slot (seq % RADV_PS5_MAX_IN_FLIGHT); and the busy time
++    * of the submissions retired, in GPU clock ticks. */
++   int gpu_time_state;
++   struct radv_ps5_memory gpu_time;
++   uint64_t gpu_last_end;
++   uint64_t gpu_busy_ticks;
+ };
+ 
+ /* The process's queue, created by the first winsys; NULL if it cannot be. */

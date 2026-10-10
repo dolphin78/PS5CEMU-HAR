@@ -1,0 +1,101 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Mon, 5 Oct 2026 21:28:28 +0000
+Subject: [PATCH] PS5: includes named the Windows way are found on other
+ systems
+
+Effects written on Windows name their includes with backslashes
+(iMMERSE: #include ".\MartysMods\mmx_global.fxh") and in whatever case,
+which only Windows' file system resolves. Elsewhere backslashes are
+read as slashes, and a name that is not there as written is looked for
+with each part matched without regard to case.
+---
+ source/effect_preprocessor.cpp | 54 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/source/effect_preprocessor.cpp b/source/effect_preprocessor.cpp
+index 626d718..6bec22f 100644
+--- a/source/effect_preprocessor.cpp
++++ b/source/effect_preprocessor.cpp
+@@ -9,6 +9,7 @@
+ #include <cstdio> // fclose, fopen, fread, fseek
+ #include <cassert>
+ #include <algorithm> // std::find_if
++#include <cctype> // std::tolower
+ 
+ #ifndef _WIN32
+ 	// On Linux systems the native path encoding is UTF-8 already, so no conversion necessary
+@@ -62,6 +63,42 @@ static const int s_precedence_lookup[] = {
+ 	11, 11, 11, 11 // unary operators
+ };
+ 
++#ifndef _WIN32
++// Effects written on Windows name their includes with backslashes and in whatever case; elsewhere a
++// name that is not there as written is looked for with each part matched without regard to case.
++static std::filesystem::path find_ignoring_case(const std::filesystem::path &path)
++{
++	std::error_code ec;
++	if (path.empty() || std::filesystem::exists(path, ec))
++		return path;
++	std::filesystem::path found = path.root_path();
++	for (const std::filesystem::path &part : path.relative_path())
++	{
++		if (std::filesystem::exists(found / part, ec))
++		{
++			found /= part;
++			continue;
++		}
++		const std::string wanted = part.u8string();
++		bool matched = false;
++		for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(found.empty() ? std::filesystem::path(".") : found, ec))
++		{
++			const std::string name = entry.path().filename().u8string();
++			if (name.size() == wanted.size() && std::equal(name.begin(), name.end(), wanted.begin(),
++					[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); }))
++			{
++				found /= entry.path().filename();
++				matched = true;
++				break;
++			}
++		}
++		if (!matched)
++			return path;
++	}
++	return found;
++}
++#endif
++
+ static bool read_file(const std::filesystem::path &path, std::string &file_data)
+ {
+ 	// Read file contents into memory
+@@ -729,7 +766,11 @@ void reshadefx::preprocessor::parse_include()
+ 		return;
+ 	}
+ 
+-	std::filesystem::path file_name = std::filesystem::u8path(_token.literal_as_string);
++	std::string file_name_string = _token.literal_as_string;
++#ifndef _WIN32
++	std::replace(file_name_string.begin(), file_name_string.end(), '\\', '/');
++#endif
++	std::filesystem::path file_name = std::filesystem::u8path(file_name_string);
+ 	std::filesystem::path file_path = std::filesystem::u8path(_output_location.source);
+ 	file_path.replace_filename(file_name);
+ 
+@@ -738,6 +779,17 @@ void reshadefx::preprocessor::parse_include()
+ 		for (const std::filesystem::path &include_path : _include_paths)
+ 			if (std::filesystem::exists(file_path = include_path / file_name, ec))
+ 				break;
++#ifndef _WIN32
++	if (!std::filesystem::exists(file_path, ec))
++	{
++		std::filesystem::path beside = std::filesystem::u8path(_output_location.source);
++		beside.replace_filename(file_name);
++		if (std::filesystem::exists(file_path = find_ignoring_case(beside), ec) == false)
++			for (const std::filesystem::path &include_path : _include_paths)
++				if (std::filesystem::exists(file_path = find_ignoring_case(include_path / file_name), ec))
++					break;
++	}
++#endif
+ 
+ 	const std::string file_path_string = file_path.u8string();
+ 

@@ -54,6 +54,7 @@ namespace ps5boxart
 		std::atomic<bool> s_enabled{true};
 		std::atomic<bool> s_stopped{false}; // for good: a game is starting
 		std::atomic<bool> s_busy{false};	// a cover is being fetched
+		std::atomic<int> s_answered{-1};	// Answered()
 
 		const char* Folder(System system)
 		{
@@ -203,7 +204,7 @@ namespace ps5boxart
 			return out;
 		}
 
-		// A 32-bit top-down TGA, as the launcher reads them (frontend/ui_host.cpp), written whole
+		// A 32-bit top-down TGA, as the launcher reads them (ui/images.cpp), written whole
 		// or not at all
 		bool WriteTga(const std::string& path, const std::vector<uint8_t>& rgba, int width, int height)
 		{
@@ -347,6 +348,7 @@ namespace ps5boxart
 				s_busy = true;
 				const bool fetched = FetchOne(curl, item.first, item.second);
 				s_busy = false;
+				s_answered = fetched ? 1 : 0;
 				if (!fetched)
 				{
 					// no network: the rest wait for the next start
@@ -392,6 +394,11 @@ namespace ps5boxart
 	uint32_t Arrivals()
 	{
 		return s_arrivals;
+	}
+
+	int Answered()
+	{
+		return s_answered;
 	}
 
 	void SetEnabled(bool enabled)

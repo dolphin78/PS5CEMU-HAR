@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Setup check</title>
+<link rel="stylesheet" href="tokens.css"><script src="kit.js"></script>
+<style>
+	/* the brand's two halves, as the banner has them, far behind */
+	.ambient { background:
+		radial-gradient(45% 70% at 18% 40%, rgba(59, 159, 223, 0.30), transparent 70%),
+		radial-gradient(45% 70% at 88% 60%, rgba(244, 182, 63, 0.20), transparent 70%),
+		linear-gradient(180deg, #080c16, #05070d); }
+	.seam { position: absolute; left: 1140px; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.22), transparent); filter: blur(0.5px); }
+	.intro { position: absolute; left: var(--safe-x); top: 92px; width: 1000px; }
+	.intro h1 { font: 700 56px/1.1 Lexend; letter-spacing: -0.8px; }
+	.intro p { font: 400 26px/1.5 Lexend; color: var(--text-2); margin-top: 14px; }
+	.checks { position: absolute; left: var(--safe-x); top: 300px; width: 1000px; display: flex; flex-direction: column; gap: 10px; }
+	.ck { display: flex; align-items: center; gap: 22px; padding: 16px 24px; border-radius: var(--r-card); background: var(--glass); border: 1.5px solid transparent; }
+	.ck .ic { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+	.ck.ok .ic { background: rgba(61, 214, 163, 0.16); color: var(--good); }
+	.ck.warn .ic { background: rgba(255, 181, 71, 0.16); color: var(--warn); }
+	.ck.opt .ic { background: rgba(255, 255, 255, 0.08); color: var(--text-3); }
+	.ck .t { font: 600 25px Lexend; }
+	.ck .d { font: 400 20px Lexend; color: var(--text-2); margin-top: 4px; }
+	.ck .act { margin-left: auto; font: 600 21px Lexend; color: var(--text-2); white-space: nowrap; }
+	.ck.focus { background: rgba(255, 255, 255, 0.1); box-shadow: 0 0 0 4px var(--ink-0), 0 0 0 7px var(--focus), 0 20px 50px rgba(0, 0, 0, 0.45); }
+	.ck.focus .act { color: var(--text); display: flex; align-items: center; gap: 10px; }
+
+	.aside { position: absolute; left: 1196px; top: 300px; width: 628px; padding: 34px 36px; border-radius: var(--r-sheet); background: rgba(14, 19, 30, 0.75); border: 1.5px solid var(--glass-edge); }
+	.aside h3 { font: 650 32px Lexend; margin-top: 10px; }
+	.aside p { font: 400 21px/1.55 Lexend; color: var(--text-2); margin-top: 14px; }
+	.formats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+	.qrrow { display: flex; gap: 24px; align-items: center; margin-top: 28px; padding-top: 26px; border-top: 1.5px solid var(--line); }
+	.qr { width: 150px; height: 150px; background: #fff; border-radius: 12px; padding: 10px; display: grid; grid-template-columns: repeat(25, 1fr); }
+	.qr i { display: block; }
+	.qrtext { font: 400 19px/1.5 Lexend; color: var(--text-2); }
+	.qrtext b { color: var(--text); font-weight: 600; display: block; font-size: 22px; margin-bottom: 6px; }
+	.progress { position: absolute; left: var(--safe-x); top: 236px; display: flex; gap: 10px; align-items: center; font: 500 20px Lexend; color: var(--text-2); }
+	.progress i { width: 40px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); display: inline-block; }
+	.progress i.done { background: var(--text); }
+</style></head>
+<body><div class="canvas">
+	<div class="ambient"></div><div class="seam"></div><div class="grain"></div><div class="vignette"></div>
+
+	<div class="intro">
+		<div class="overline">Welcome to PS5CEMU-HAR</div>
+		<h1 style="margin-top:14px">Let's check your setup</h1>
+	</div>
+	<div class="progress"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i></i><i></i>&nbsp; Five of seven are ready. Two need a look.</div>
+
+	<div class="checks">
+		<div class="ck ok"><span class="ic" data-glyph="check" data-size="26"></span><div><div class="t">Storage</div><div class="d">/data is reachable · 412 GB free</div></div></div>
+		<div class="ck ok"><span class="ic" data-glyph="check" data-size="26"></span><div><div class="t">Recompilers</div><div class="d">Executable memory: games run at full speed, no HEN grant needed</div></div></div>
+		<div class="ck warn focus"><span class="ic" data-glyph="warn" data-size="26"></span><div><div class="t">Wii U games</div><div class="d">None in /data/ps5cemu/games yet</div></div><span class="act"><span data-glyph="cross" data-size="24"></span>Choose a folder</span></div>
+		<div class="ck ok"><span class="ic" data-glyph="check" data-size="26"></span><div><div class="t">3DS games</div><div class="d">176 games in USB drive 1 / 3DS</div></div></div>
+		<div class="ck warn"><span class="ic" data-glyph="warn" data-size="26"></span><div><div class="t">Wii U disc keys</div><div class="d">keys.txt is missing: only encrypted .wud and .wux need it</div></div><span class="act">How to</span></div>
+		<div class="ck opt"><span class="ic" data-glyph="dash" data-size="26"></span><div><div class="t">3DS system files <span class="dim" style="font-weight:400">· optional</span></div><div class="d">Artic Setup copies them from your 3DS, for the Home Menu</div></div><span class="act">Artic Base</span></div>
+		<div class="ck ok"><span class="ic" data-glyph="check" data-size="26"></span><div><div class="t">Box art</div><div class="d">GameTDB is reachable · 214 covers</div></div></div>
+	</div>
+
+	<div class="aside">
+		<div class="overline">Wii U games</div>
+		<h3>Where your Wii U games go</h3>
+		<p>Put them in <b style="color:var(--text);font-weight:600">/data/ps5cemu/games</b>, or choose any folder the PS5 can read, such as one on a USB drive. Folders inside it are searched too.</p>
+		<div class="formats"><span class="chip">.wua</span><span class="chip">.wud</span><span class="chip">.wux</span><span class="chip">code · content · meta</span><span class="chip">.rpx</span></div>
+		<div class="qrrow">
+			<div class="qr" id="qr"></div>
+			<div class="qrtext"><b>The guide, on your phone</b>Scan it for the game files and HEN setup pages: github.com/premohq/PS5CEMU-HAR</div>
+		</div>
+	</div>
+
+	<div class="hints">
+		<span class="hint"><span data-glyph="cross"></span>Choose a folder</span>
+		<span class="hint"><span data-glyph="triangle"></span>Check again</span>
+		<span class="hint"><span data-glyph="circle"></span>Continue to Home</span>
+	</div>
+</div>
+<script>
+	// a stand-in QR code: the three finder squares and a seeded pattern
+	const qr = document.getElementById('qr'); let seed = 7;
+	const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+	const finder = (x, y) => [[0, 0], [18, 0], [0, 18]].some(([fx, fy]) => { const dx = x - fx, dy = y - fy; if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return false; return dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4); });
+	const inFinder = (x, y) => [[0, 0], [18, 0], [0, 18]].some(([fx, fy]) => x >= fx - 1 && y >= fy - 1 && x <= fx + 7 && y <= fy + 7);
+	for (let y = 0; y < 25; y++) for (let x = 0; x < 25; x++) { const i = document.createElement('i'); const on = inFinder(x, y) ? finder(x, y) : rnd() > 0.52; i.style.background = on ? '#05070d' : 'transparent'; qr.appendChild(i); }
+</script>
+</body></html>

@@ -10,6 +10,17 @@ export PS5CEMU_SYSROOT=$ps5cemu_root/build/sysroot
 export PS5CEMU_BUILD=$ps5cemu_root/build
 export PS5CEMU_TOOLCHAIN=$ps5cemu_root/tools/ps5.cmake
 export JOBS=${JOBS:-$(nproc)}
+# RADV with patches/mesa (tools/build-radv.sh), and the archive tools/link.sh links: that one, unless
+# RADV_ARCHIVE names a build made elsewhere
+export PS5CEMU_RADV=$ps5cemu_root/.deps/PS5_Vulkan/.deps/native/radv-ps5cemu
+export PS5CEMU_RADV_ARCHIVE=${RADV_ARCHIVE:-$PS5CEMU_RADV/lib/libvulkan_radeon.ps5.a}
+
+ps5cemu_radv_stamp() {
+    # Which RADV archive a link takes: its real path, size and time. tools/link.sh keeps it beside the
+    # ELF, and tools/build-cemu.sh links again when it changes, which ninja would not see.
+    [[ -f $PS5CEMU_RADV_ARCHIVE ]] || return 0
+    printf '%s %s\n' "$(realpath -- "$PS5CEMU_RADV_ARCHIVE")" "$(stat -L -c '%s %Y' -- "$PS5CEMU_RADV_ARCHIVE")"
+}
 
 ps5cemu_cmake() {
     # ps5cemu_cmake SOURCE BUILD [cmake arguments...]: configure, build and install into the sysroot.

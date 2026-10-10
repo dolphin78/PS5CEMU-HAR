@@ -1,25 +1,17 @@
-# Remote touch screen, matching focus states on both emulator sides.
-wait 6
-press cross
-wait 2
+# Shared remote touch screen settings in the v3.5.0 shell.
+wait 90
 press r1 r1
-press down down down
-shot remote-touch-wiiu-off-rail
-press right
-shot browser-screen-off
+press right down
+wait 25
+shot remote-touch-wiiu-off
 press cross
-shot browser-screen-on
+wait 25
+shot remote-touch-wiiu-on
 press circle
-shot remote-touch-wiiu-on-rail
-press circle circle
-press right cross
-wait 2
-press r1 r1
-press down down down
-shot browser-screen-3ds
-press right
+press l1
+press right down
+wait 25
 shot remote-touch-3ds-on
 press cross
+wait 25
 shot remote-touch-3ds-off
-press circle
-shot remote-touch-3ds-off-rail

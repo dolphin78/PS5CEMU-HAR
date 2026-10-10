@@ -1,0 +1,356 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Tue, 6 Oct 2026 15:49:33 +0000
+Subject: [PATCH] wsi/videoout: flips on the GPU, behind the frame
+ (RADV_PS5_GPU_FLIP=1)
+
+A present waited for its frame on the flip thread, which spun a core on
+the frame's fence for up to 1.5 ms and then woke up to 200 us late
+(1 ms before patch 0003) before calling sceVideoOutSubmitFlip: a frame
+done just before a vblank could miss it, and a core spun on every frame.
+
+With RADV_PS5_GPU_FLIP=1 the flip goes on the GPU's queue instead, as
+PS5_Vulkan's first driver presented (M5 C1, R74): sceAgcDcbSetFlip's
+packets (mode 1, the flip's argument as its marker) in a submission of
+their own, which the queue's order runs after the frame's work. The GPU
+hands the flip to VideoOut as it reaches it, and no thread waits.
+
+- The winsys submits words after everything submitted before them
+  (radv_ps5_submit_after), with the completion every submission ends
+  with, so the ring, the sequence numbers and the statistics line count
+  them as any other submission. The swapchain declares it weak.
+- A present takes the GPU only once its fence is submitted (its frame is
+  then on the queue) and no flip is still waiting on the thread, so that
+  VideoOut gets every flip in order; otherwise the thread flips it, as
+  before. A present whose submission is deferred behind a timeline
+  value is the only case; Cemu uses none.
+- An acquire is unchanged: a buffer whose flip VideoOut has not shown
+  yet, now including one the GPU has not reached, is waited for a vblank
+  at a time, and the flip status reports the argument either way.
+- The variable is read at the first present and holds for the process:
+  the launcher's, Cemu's and Azahar's presents flip the same way.
+- The host model's sceAgcDcbSetFlip writes the 64 words as one NOP and
+  shows the flip at once.
+
+On the PC model: 2,000,000 presents through three images, two
+submissions a frame (the frame and the flip, 72 words), and a frame held
+behind a timeline semaphore opened 30 ms later presents on the GPU too,
+under the Khronos validation layer without a message. The console
+branch compiles against PS5_PayloadSDK's headers. Unmeasured on the
+console: the boot log says "wsi/videoout: flips on the GPU" and "the
+first flip on the GPU", and the statistics line's count is a submission
+a frame higher.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01C4t5zdreNEFQSZofsHW2nx
+---
+ src/amd/vulkan/winsys/ps5/radv_ps5_cs.c     |  39 +++++
+ src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h |   9 ++
+ src/vulkan/wsi/wsi_common_videoout.c        | 159 +++++++++++++++++++-
+ 3 files changed, 204 insertions(+), 3 deletions(-)
+
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+index a04d832..7bcf172 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+@@ -830,6 +830,45 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+    return VK_SUCCESS;
+ }
+ 
++int
++radv_ps5_submit_after(const uint32_t *words, uint32_t count)
++{
++   struct radv_ps5_queue *const queue = radv_ps5_queue_get();
++   if (!queue || count == 0 || count > RADV_PS5_RING_WORDS / 4)
++      return -1;
++   const uint32_t total = count + RADV_PS5_COMPLETION_WORDS;
++
++   simple_mtx_lock(&queue->submit_lock);
++   const uint64_t seq = queue->submitted_seq + 1;
++   const uint64_t claim_start = radv_ps5_ticks();
++   uint32_t *const ring = radv_ps5_queue_claim(queue, total, seq);
++   const uint64_t copy_start = radv_ps5_ticks();
++   if (!ring) {
++      simple_mtx_unlock(&queue->submit_lock);
++      return -1;
++   }
++   /* No GPU time of its own: its slot says so to the retire. */
++   if (queue->gpu_time_state > 0) {
++      volatile uint64_t *const slot = radv_ps5_gpu_time_slot(queue, seq);
++      slot[0] = slot[1] = UINT64_MAX;
++   }
++   uint32_t *at = radv_ps5_stream_words(ring, words, count);
++   uint32_t completion[RADV_PS5_COMPLETION_WORDS];
++   radv_ps5_completion_words(completion, (uint64_t)(uintptr_t)queue->marker, (uint32_t)seq);
++   at = radv_ps5_stream_words(at, completion, RADV_PS5_COMPLETION_WORDS);
++   assert((uint32_t)(at - ring) == total);
++   const uint64_t copy_end = radv_ps5_ticks();
++
++   p_atomic_set(&queue->submitted_seq, seq);
++   const int submitted = radv_ps5_submit(ring, total, RADV_PS5_STREAMED_COPY, queue->marker, (uint32_t)seq);
++   radv_ps5_note_submission(queue, total, copy_start - claim_start, copy_end - copy_start);
++   simple_mtx_unlock(&queue->submit_lock);
++   if (submitted != 0)
++      fprintf(stderr, "radv/ps5: sceAgcDriverSubmitDcb failed for words submitted after the rest: 0x%08x\n",
++              (unsigned)submitted);
++   return submitted;
++}
++
+ void
+ radv_ps5_cs_init_functions(struct radv_ps5_winsys *ws)
+ {
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
+index 3a8a0bf..a66de23 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.h
+@@ -83,6 +83,15 @@ struct radv_ps5_queue *radv_ps5_queue_get(void);
+ /* The GPU's timestamp clock, read through the queue; 0 if it cannot be. */
+ uint64_t radv_ps5_read_gpu_clock(void);
+ 
++/* Submits count PM4 words that the GPU runs after everything submitted before
++ * them, as a submission of their own that ends, as every submission does, with
++ * the completion: the VideoOut swapchain's flips on the GPU
++ * (wsi_common_videoout.c, which declares it weak so that it links without this
++ * winsys). The words need no preamble: they must not depend on GPU state.
++ * Returns 0, sceAgcDriverSubmitDcb's error, or -1 when the queue cannot take
++ * them (nothing was submitted). */
++int radv_ps5_submit_after(const uint32_t *words, uint32_t count);
++
+ struct radv_ps5_winsys {
+    struct radeon_winsys base;
+    struct radeon_info info;
+diff --git a/src/vulkan/wsi/wsi_common_videoout.c b/src/vulkan/wsi/wsi_common_videoout.c
+index 2fca090..b2e4e68 100644
+--- a/src/vulkan/wsi/wsi_common_videoout.c
++++ b/src/vulkan/wsi/wsi_common_videoout.c
+@@ -32,8 +32,10 @@
+  * screen keeps its last frame in between.
+  *
+  * A present waits for the frame on a thread and flips it with
+- * sceVideoOutSubmitFlip at the next vblank; FIFO is the only present mode. A
+- * title may ask VideoOut to show each flip for at least two or three vblanks
++ * sceVideoOutSubmitFlip at the next vblank; FIFO is the only present mode.
++ * With RADV_PS5_GPU_FLIP=1 the flip goes on the GPU's queue instead, behind
++ * the frame (videoout_flip_on_gpu_locked). A title may ask VideoOut to show
++ * each flip for at least two or three vblanks
+  * (wsi_videoout_set_flip_rate): at 119.88 Hz, three paces 40 fps evenly. An
+  * acquire takes a buffer that is neither on screen, nor waiting for its flip
+  * to show, nor held by an application, the one flipped longest ago, and waits
+@@ -49,22 +51,31 @@
+ #include "c11/threads.h"
+ #include "util/macros.h"
+ #include "util/os_time.h"
++#include "util/u_debug.h"
+ #include "util/u_math.h"
+ #include "vk_device.h"
++#include "vk_fence.h"
+ #include "vk_instance.h"
+ #include "vk_physical_device.h"
++#include "vk_sync.h"
+ #include "vk_util.h"
+ #include "wsi_common_entrypoints.h"
+ #include "wsi_common_private.h"
+ 
+ #if defined(__PROSPERO__)
+ #include <immintrin.h>
++#include <ps5platform/agc.h>
+ #include <ps5platform/kernel.h>
+ #include <ps5platform/videoout.h>
+ #else
+ #include <sys/mman.h>
+ #endif
+ 
++/* The PS5 winsys's submission of words the GPU runs after everything submitted
++ * before them (radv_ps5_cs.c), which a flip on the GPU goes through. Weak: the
++ * swapchain links without it, and flips from the CPU then. */
++extern int radv_ps5_submit_after(const uint32_t *words, uint32_t count) __attribute__((weak));
++
+ /* Buffers in each size's set. */
+ #define VIDEOOUT_BUFFERS 5
+ #define VIDEOOUT_BUFFER_ALIGNMENT (UINT64_C(2) << 20)
+@@ -158,6 +169,33 @@ sceVideoOutConfigureOutput(int32_t handle, uint32_t mode, const void *a, const v
+ {
+    return -1;
+ }
++
++struct ps5_agc_command_buffer {
++   uint32_t *bottom;
++   uint32_t *top;
++   uint32_t *up;
++   uint32_t *down;
++   uintptr_t callback;
++   void *user_data;
++   uint32_t reserved_dwords;
++   uint32_t padding;
++};
++
++/* The flip as the 64 words the console's helper takes, one NOP here, and shown
++ * at once, as the model's sceVideoOutSubmitFlip shows one. */
++static uint32_t *
++sceAgcDcbSetFlip(struct ps5_agc_command_buffer *buffer, uint32_t video, int buffer_index, uint32_t mode,
++                 int64_t marker)
++{
++   uint32_t *const start = buffer->up;
++   if (buffer->top - buffer->up < 64)
++      return NULL;
++   start[0] = 0xc03e1000u; /* PKT3(NOP, 62): the header and 63 words */
++   memset(start + 1, 0, 63 * sizeof(uint32_t));
++   buffer->up += 64;
++   host_shown_argument = marker;
++   return start;
++}
+ #endif
+ 
+ /* The sizes VideoOut takes buffers of, the largest first, and a buffer's
+@@ -280,6 +318,13 @@ struct wsi_videoout_output {
+    thrd_t thread;
+    struct wsi_videoout_present queue[VIDEOOUT_BUFFERS * 2];
+    uint32_t queue_head, queue_count;
++
++   /* Flips on the GPU (RADV_PS5_GPU_FLIP=1): 0 until the first present
++    * decides, 1 on, -1 off. Whether a present has gone to the thread all the
++    * same, and how many flips the GPU was given, for the log. */
++   int gpu_flip;
++   bool gpu_flip_fell_back;
++   uint64_t gpu_flips;
+ };
+ 
+ static struct wsi_videoout_output videoout_output = {
+@@ -544,6 +589,95 @@ videoout_flip_thread(void *data)
+    return 0;
+ }
+ 
++/* --- Flips on the GPU ---------------------------------------------------- */
++
++/* sceAgcDcbSetFlip reserves 64 words and writes 19 of them, the last the
++ * header of a NOP whose body it leaves as the buffer held it (PS5_Vulkan,
++ * 2026-09-17): zeroes here. The rest is room the helper never needed. */
++#define VIDEOOUT_GPU_FLIP_WORDS 256
++
++/* AGC's call when a helper needs more words than a command buffer has left.
++ * The buffer is sized so that it never does; the helper then fails. */
++static uint8_t
++videoout_agc_out_of_space(struct ps5_agc_command_buffer *buffer, uint32_t words, void *user_data)
++{
++   (void)buffer;
++   (void)words;
++   (void)user_data;
++   return 0;
++}
++
++/* Whether flips go on the GPU (RADV_PS5_GPU_FLIP=1): decided at the first
++ * present, for the whole process, since flips from the GPU and from the
++ * thread could reach VideoOut out of order. Under lock. */
++static bool
++videoout_gpu_flip_locked(void)
++{
++   struct wsi_videoout_output *out = &videoout_output;
++   if (out->gpu_flip == 0) {
++      const bool asked = debug_get_bool_option("RADV_PS5_GPU_FLIP", false);
++      out->gpu_flip = asked && radv_ps5_submit_after != NULL ? 1 : -1;
++      if (asked)
++         fprintf(stderr, "wsi/videoout: %s\n",
++                 out->gpu_flip > 0 ? "flips on the GPU (RADV_PS5_GPU_FLIP)"
++                                   : "RADV_PS5_GPU_FLIP: this driver has no submission for flips; they go from the CPU");
++   }
++   return out->gpu_flip > 0;
++}
++
++/* Whether a present's fence has been submitted for signalling: the frame's
++ * work is then on the GPU's queue, which runs in order, so a flip submitted
++ * after it runs after the frame. It has unless the present's submission was
++ * deferred, waiting for a timeline value not yet submitted. */
++static bool
++videoout_frame_submitted(const struct wsi_videoout_swapchain *chain, VkFence handle)
++{
++   VK_FROM_HANDLE(vk_device, device, chain->base.device);
++   VK_FROM_HANDLE(vk_fence, fence, handle);
++   return vk_sync_wait(device, vk_fence_get_active_sync(fence), 0, VK_SYNC_WAIT_PENDING, 0) == VK_SUCCESS;
++}
++
++/* The flip of buffer, on the GPU's queue behind its frame: the GPU hands it to
++ * VideoOut as it reaches the flip, once the frame's work is done, where the
++ * flip thread spins a core on each frame's fence and then wakes up to a sleep
++ * after it. The packets are AGC's (sceAgcDcbSetFlip, mode 1, the way
++ * PS5_Vulkan's first driver presented: M5 C1, R74) in a submission of their
++ * own; VideoOut's flip status reports the argument they carry as a flip's
++ * from the CPU does. Under lock; false when the flip was not submitted. */
++static bool
++videoout_flip_on_gpu_locked(uint32_t buffer)
++{
++   struct wsi_videoout_output *out = &videoout_output;
++   uint32_t words[VIDEOOUT_GPU_FLIP_WORDS] = {0};
++   struct ps5_agc_command_buffer command = {
++      .bottom = words,
++      .top = words + VIDEOOUT_GPU_FLIP_WORDS - 1,
++      .up = words,
++      .down = words + VIDEOOUT_GPU_FLIP_WORDS - 1,
++      .callback = (uintptr_t)videoout_agc_out_of_space,
++   };
++   const int64_t argument = out->flip_argument + 1;
++   if (!sceAgcDcbSetFlip(&command, (uint32_t)out->handle, (int)buffer, PS5_VIDEO_OUT_FLIP_VSYNC, argument) ||
++       command.up <= command.bottom || command.up > command.top) {
++      fprintf(stderr, "wsi/videoout: sceAgcDcbSetFlip wrote no flip of buffer %u; flips go from the CPU\n", buffer);
++      out->gpu_flip = -1;
++      return false;
++   }
++   const int result = radv_ps5_submit_after(words, (uint32_t)(command.up - command.bottom));
++   if (result != 0) {
++      fprintf(stderr, "wsi/videoout: the flip of buffer %u was not submitted (%d); flips go from the CPU\n", buffer,
++              result);
++      out->gpu_flip = -1;
++      return false;
++   }
++   out->flip_argument = argument;
++   out->buffer[buffer].argument = argument;
++   if (out->gpu_flips++ == 0)
++      fprintf(stderr, "wsi/videoout: the first flip on the GPU: buffer %u, %u words\n", buffer,
++              (unsigned)(command.up - command.bottom));
++   return true;
++}
++
+ /* --- VK_KHR_display -------------------------------------------------------- */
+ 
+ VKAPI_ATTR VkResult VKAPI_CALL
+@@ -1053,6 +1187,7 @@ videoout_swapchain_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image
+    struct wsi_videoout_output *out = &videoout_output;
+ 
+    const uint32_t buffer = chain->first + image_index;
++   const VkFence fence = chain->base.fences[image_index];
+    mtx_lock(&out->lock);
+    out->buffer[buffer].held = false;
+    if (chain->retired) {
+@@ -1060,6 +1195,24 @@ videoout_swapchain_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image
+       mtx_unlock(&out->lock);
+       return VK_ERROR_OUT_OF_DATE_KHR;
+    }
++   /* On the GPU once the frame is on its queue, and only behind the thread's
++    * flips, so that VideoOut gets every flip in order. */
++   if (videoout_gpu_flip_locked()) {
++      const bool behind_thread = out->queue_count != 0;
++      const bool frame_submitted = !behind_thread && videoout_frame_submitted(chain, fence);
++      if (frame_submitted && videoout_flip_on_gpu_locked(buffer)) {
++         cnd_broadcast(&out->changed);
++         mtx_unlock(&out->lock);
++         return VK_SUCCESS;
++      }
++      if (!out->gpu_flip_fell_back) {
++         out->gpu_flip_fell_back = true;
++         fprintf(stderr, "wsi/videoout: a flip went to the flip thread (%s)\n",
++                 out->gpu_flip < 0     ? "flips on the GPU stopped"
++                 : behind_thread       ? "flips were still waiting there"
++                                       : "its frame was not on the GPU's queue yet");
++      }
++   }
+    if (!out->thread_started) {
+       if (thrd_create(&out->thread, videoout_flip_thread, NULL) != thrd_success) {
+          mtx_unlock(&out->lock);
+@@ -1071,7 +1224,7 @@ videoout_swapchain_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image
+    out->queue[(out->queue_head + out->queue_count) % ARRAY_SIZE(out->queue)] = (struct wsi_videoout_present){
+       .chain = chain,
+       .buffer = buffer,
+-      .fence = chain->base.fences[image_index],
++      .fence = fence,
+    };
+    out->queue_count++;
+    out->buffer[buffer].pending = true;

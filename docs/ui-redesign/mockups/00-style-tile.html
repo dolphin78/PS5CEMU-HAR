@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Style tile</title>
+<link rel="stylesheet" href="tokens.css"><script src="kit.js"></script>
+<style>
+	.ambient { background: radial-gradient(40% 60% at 10% 10%, rgba(59, 159, 223, 0.22), transparent 70%), radial-gradient(40% 60% at 95% 95%, rgba(244, 182, 63, 0.16), transparent 70%), linear-gradient(180deg, #080c16, #05070d); }
+	.wrap { position: absolute; inset: 56px 72px; display: grid; grid-template-columns: 540px 1fr 580px; grid-template-rows: auto 1fr; gap: 28px 40px; }
+	h1 { grid-column: 1 / -1; font: 700 44px Lexend; display: flex; align-items: baseline; gap: 22px; }
+	h1 small { font: 400 22px Lexend; color: var(--text-3); }
+	.box { border-radius: var(--r-sheet); background: rgba(255, 255, 255, 0.04); border: 1.5px solid var(--glass-edge); padding: 26px 28px; }
+	.box + .box { margin-top: 24px; }
+	.overline { margin-bottom: 18px; font-size: 16px; color: var(--text-3); }
+	.sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+	.sw div { height: 86px; border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-end; font: 500 15px/1.3 Lexend; border: 1.5px solid rgba(255, 255, 255, 0.1); }
+	.sw div b { font: 600 17px Lexend; }
+	.type div { display: flex; align-items: baseline; gap: 18px; white-space: nowrap; overflow: hidden; }
+	.type div + div { margin-top: 10px; }
+	.type span.k { width: 110px; flex: none; font: 500 15px Lexend; color: var(--text-3); }
+	.row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+	.row + .row { margin-top: 18px; }
+	.toggle { width: 74px; height: 42px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); position: relative; }
+	.toggle::after { content: ""; position: absolute; left: 4px; top: 4px; width: 34px; height: 34px; border-radius: 50%; background: var(--text-2); }
+	.toggle.on { background: var(--good); }
+	.toggle.on::after { left: 36px; background: #fff; }
+	.slider { width: 220px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); position: relative; }
+	.slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 60%; border-radius: 4px; background: var(--wiiu); }
+	.slider b { position: absolute; left: calc(60% - 11px); top: -7px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+	.stepper { display: flex; align-items: center; gap: 6px; }
+	.stepper i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+	.stepper i.on { background: var(--n3ds); }
+	.stepper i.cur { width: 22px; height: 22px; background: var(--n3ds); box-shadow: 0 0 0 4px rgba(244, 182, 63, 0.25); }
+	.focusdemo { display: flex; gap: 46px; align-items: flex-end; margin-top: 40px; justify-content: center; }
+	.focusdemo .c { width: 136px; height: 190px; margin: 0 auto; }
+	.focusdemo .lbl { text-align: center; font: 500 16px Lexend; color: var(--text-3); margin-top: 16px; }
+	.focusdemo .lift { transform: translateY(-10px) scale(1.07); }
+	.curve { width: 100%; height: 170px; }
+	.motion td { font: 400 18px/1.5 Lexend; color: var(--text-2); padding: 3px 0; }
+	.motion td:first-child { color: var(--text); font-weight: 500; width: 210px; }
+	.sounds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; font: 400 18px Lexend; color: var(--text-2); }
+	.sounds b { color: var(--text); font-weight: 500; }
+	.glyphs { display: flex; gap: 10px; color: var(--text); flex-wrap: nowrap !important; }
+	.glyphs span svg { width: 34px; height: 34px; }
+	.grid8 { height: 86px; border-radius: 12px; background-image: linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px); background-size: 16px 16px; position: relative; }
+	.grid8 div { position: absolute; border: 2px dashed rgba(244, 182, 63, 0.6); border-radius: 8px; inset: 10px 24px; }
+	.grid8 span { position: absolute; left: 30px; top: 18px; font: 500 15px Lexend; color: var(--text-2); }
+</style></head>
+<body><div class="canvas">
+	<div class="ambient"></div><div class="grain"></div>
+	<div class="wrap">
+		<h1>PS5CEMU-HAR · design system <small>tokens, type, focus, controls, motion and sound, at 1920 × 1080</small></h1>
+
+		<div>
+			<div class="box">
+				<div class="overline">Colour</div>
+				<div class="sw">
+					<div style="background:#05070d"><b>Ink 0</b>#05070d page</div>
+					<div style="background:#0a0f1b"><b>Ink 1</b>#0a0f1b sheets</div>
+					<div style="background:rgba(255,255,255,.085)"><b>Glass</b>white 8.5%</div>
+					<div style="background:#f5f7fb;color:#0a0f1b"><b>Text</b>#f5f7fb · 70 · 46%</div>
+					<div style="background:#5aa9ff;color:#071a33"><b>Wii U sky</b>#5aa9ff</div>
+					<div style="background:#f4b63f;color:#2a1a02"><b>3DS sand</b>#f4b63f</div>
+					<div style="background:linear-gradient(90deg,#3dd6a3 33%,#ffb547 33% 66%,#ff7272 66%);color:#05070d"><b>Status</b>good · warn · bad</div>
+					<div style="background:linear-gradient(135deg,#0f5f74,#9ad3a8)"><b>Ambient</b>from the cover</div>
+				</div>
+			</div>
+			<div class="box">
+				<div class="overline">Type · Lexend</div>
+				<div class="type">
+					<div><span class="k">Display 64–72</span><span style="font:700 60px/1 Lexend">Splatoon</span></div>
+					<div><span class="k">Title 44</span><span style="font:650 40px Lexend">Screens</span></div>
+					<div><span class="k">Heading 32</span><span style="font:600 30px Lexend">Your games</span></div>
+					<div><span class="k">Body 26</span><span style="font:400 26px Lexend;color:var(--text-2)">Top screen large.</span></div>
+					<div><span class="k">Caption 20</span><span style="font:400 20px Lexend;color:var(--text-2)">Nintendo · 2017 · 41 h played</span></div>
+					<div><span class="k">Overline 18</span><span class="overline" style="margin:0;color:var(--text-2)">Continue · last played</span></div>
+				</div>
+			</div>
+		</div>
+
+		<div>
+			<div class="box">
+				<div class="overline">Focus · one thing, found at a glance</div>
+				<div class="focusdemo">
+					<div><div class="c" data-game="sm3dw" style="opacity:.92"></div><div class="lbl">Resting</div></div>
+					<div><div class="c lift focus" data-game="sm3dw"></div><div class="lbl">Focused: lift 7%, white ring,<br>the cover's own colour as glow</div></div>
+					<div><div class="c" data-game="sm3dw" style="opacity:.45;filter:saturate(.4)"></div><div class="lbl">Unavailable: dimmed,<br>says why when focused</div></div>
+				</div>
+			</div>
+			<div class="box">
+				<div class="overline">Controls · values you can see</div>
+				<div class="row"><span class="btn primary focus"><span data-glyph="play" data-size="24"></span>Play</span><span class="btn">Game hub</span><span class="btn icon"><span data-glyph="more" data-size="28"></span></span></div>
+				<div class="row"><span class="toggle on"></span><span class="toggle"></span><span class="slider"><i></i><b></b></span><span class="muted" style="font-size:20px">60%</span>
+					<span class="stepper"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="cur"></i><i></i><i></i><i></i><i></i></span><span class="muted" style="font-size:20px">6×</span></div>
+				<div class="row"><span class="chip good"><span class="dot" style="background:var(--good)"></span>Playable</span><span class="chip warn"><span class="dot" style="background:var(--warn)"></span>Minor issues</span><span class="chip bad"><span class="dot" style="background:var(--bad)"></span>Crashes</span><span class="sys wiiu"><i></i>Wii U</span><span class="sys n3ds"><i></i>3DS</span></div>
+				<div class="row glyphs"><span data-glyph="cross"></span><span data-glyph="circle"></span><span data-glyph="square"></span><span data-glyph="triangle"></span><span data-glyph="options"></span><span data-glyph="touchpad"></span><span data-glyph="l1" data-size="40"></span><span data-glyph="r1" data-size="40"></span><span data-glyph="l2" data-size="40"></span><span data-glyph="updown"></span><span data-glyph="leftright"></span></div>
+			</div>
+		</div>
+
+		<div>
+			<div class="box">
+				<div class="overline">Motion · nothing teleports</div>
+				<svg class="curve" viewBox="0 0 460 170">
+					<path d="M10 160 H450 M10 10 V160" stroke="rgba(255,255,255,.15)" stroke-width="1.5"/>
+					<path d="M10 160 C 60 40, 90 22, 150 14 S 300 10, 450 10" fill="none" stroke="#5aa9ff" stroke-width="3"/>
+					<path d="M10 160 C 40 -20, 110 -6, 150 14 S 230 12, 300 10 S 400 10, 450 10" fill="none" stroke="#f4b63f" stroke-width="3" stroke-dasharray="7 6"/>
+					<text x="300" y="44" fill="#a9d1ff" font-family="Lexend" font-size="14">focus spring, ω 20</text>
+					<text x="210" y="78" fill="#ffd98a" font-family="Lexend" font-size="14">toggle thumb, back-out</text>
+				</svg>
+				<table class="motion">
+					<tr><td>Focus glide</td><td>spring ω 20 · 120–200 ms</td></tr>
+					<tr><td>Sheets and menus</td><td>spring ω 13 · about 300 ms</td></tr>
+					<tr><td>Screen change</td><td>420 ms quint-out · 40 ms stagger</td></tr>
+					<tr><td>Ambient colour</td><td>600 ms ease, follows focus</td></tr>
+					<tr><td>Reduce motion</td><td>150 ms fades, nothing drifts</td></tr>
+				</table>
+			</div>
+			<div class="box">
+				<div class="overline">Sound and touch</div>
+				<div class="sounds">
+					<span><b>Focus</b> tick, panned by x</span><span><b>Select</b> two-note up</span>
+					<span><b>Back</b> two-note down</span><span><b>Edge</b> bump + light rumble</span>
+					<span><b>Toggle</b> on high, off low</span><span><b>Slider</b> pitch follows value</span>
+					<span><b>Launch</b> chime, music ducks</span><span><b>Light bar</b> system colour</span>
+				</div>
+			</div>
+		</div>
+	</div>
+</div></body></html>

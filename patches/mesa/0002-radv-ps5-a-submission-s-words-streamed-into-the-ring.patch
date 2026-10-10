@@ -1,0 +1,201 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Mon, 5 Oct 2026 21:27:21 +0000
+Subject: [PATCH] radv/ps5: a submission's words streamed into the ring
+
+Every word a submission carries was copied into the ring with memcpy, which
+reads each ring line into the CPU's caches first, and then evicted line by
+line with CLFLUSHOPT so the command processor would fetch it from memory:
+two passes over the words on the submitting thread, which in Cemu is the
+emulated GPU's thread.
+
+The copy now uses non-temporal stores (radv_ps5_stream_words): the words go
+to memory without the line reads and leave nothing in the caches to evict,
+and radv_ps5_submit, told the words were streamed, only fences them. This
+holds whether or not the command processor's fetch sees the CPU's caches,
+which was never measured (the coherence probe of 2026-09-27 covered shader
+and copy access). The GPU clock's one-packet submission still flushes.
+
+On a host Xeon, a 256 KiB submission into a 16 MiB ring took 72 us with
+memcpy and CLFLUSHOPT and 33-43 us streamed. Unmeasured on the console; the
+statistics line's copy_ms and flush_ms show it there.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VwQbTVomEg8vnnGcSRXLMp
+---
+ src/amd/vulkan/winsys/ps5/radv_ps5_cs.c       | 64 +++++++++++++++----
+ src/amd/vulkan/winsys/ps5/radv_ps5_platform.c | 12 +++-
+ src/amd/vulkan/winsys/ps5/radv_ps5_platform.h | 11 ++--
+ 3 files changed, 68 insertions(+), 19 deletions(-)
+
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+index 59b4da1..c603ef0 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_cs.c
+@@ -16,6 +16,10 @@
+ #include "util/u_math.h"
+ #include "sid.h"
+ 
++#if defined(__SSE2__)
++#include <emmintrin.h>
++#endif
++
+ /* Command streams. The console faults a PM4 INDIRECT_BUFFER into title memory
+  * (PS5_Vulkan B8), so nothing is chained: a stream's words stay in CPU memory,
+  * in chunks that never move, and a submission copies every stream it carries
+@@ -369,7 +373,7 @@ radv_ps5_read_gpu_clock(void)
+    words[6] = 0;
+    words[7] = 0;
+    uint64_t clock = 0;
+-   if (radv_ps5_submit(words, 8, NULL, 0) == 0) {
++   if (radv_ps5_submit(words, 8, false, NULL, 0) == 0) {
+       const int64_t deadline = os_time_get_nano() + INT64_C(1000000000);
+       do {
+          radv_ps5_cpu_flush((const void *)value, sizeof(*value));
+@@ -477,6 +481,45 @@ radv_ps5_stream_pieces(const struct radv_ps5_cs *cs, struct util_dynarray *piece
+                                 }));
+ }
+ 
++/* The GPU fetches a submission's words from memory, and the CPU's copy of them
++ * into the ring is never read back: they are written with non-temporal stores,
++ * which skip reading each ring line into the cache and leave no dirty lines to
++ * evict before the submission (radv_ps5_submit's streamed words). */
++#if defined(__SSE2__)
++#define RADV_PS5_STREAMED_COPY true
++
++static uint32_t *
++radv_ps5_stream_words(uint32_t *restrict to, const uint32_t *restrict from, uint32_t count)
++{
++   for (; count && ((uintptr_t)to & 15); count--)
++      _mm_stream_si32((int *)to++, (int)*from++);
++   for (; count >= 16; count -= 16, to += 16, from += 16) {
++      const __m128i a = _mm_loadu_si128((const __m128i *)from);
++      const __m128i b = _mm_loadu_si128((const __m128i *)from + 1);
++      const __m128i c = _mm_loadu_si128((const __m128i *)from + 2);
++      const __m128i d = _mm_loadu_si128((const __m128i *)from + 3);
++      _mm_stream_si128((__m128i *)to, a);
++      _mm_stream_si128((__m128i *)to + 1, b);
++      _mm_stream_si128((__m128i *)to + 2, c);
++      _mm_stream_si128((__m128i *)to + 3, d);
++   }
++   for (; count >= 4; count -= 4, to += 4, from += 4)
++      _mm_stream_si128((__m128i *)to, _mm_loadu_si128((const __m128i *)from));
++   for (; count; count--)
++      _mm_stream_si32((int *)to++, (int)*from++);
++   return to;
++}
++#else
++#define RADV_PS5_STREAMED_COPY false
++
++static uint32_t *
++radv_ps5_stream_words(uint32_t *restrict to, const uint32_t *restrict from, uint32_t count)
++{
++   memcpy(to, from, (size_t)count * sizeof(uint32_t));
++   return to + count;
++}
++#endif
++
+ static uint32_t
+ radv_ps5_count_streams(struct ac_cmdbuf **streams, unsigned count)
+ {
+@@ -491,12 +534,9 @@ radv_ps5_copy_streams(uint32_t *at, struct ac_cmdbuf **streams, unsigned count)
+ {
+    for (unsigned i = 0; i < count; i++) {
+       const struct radv_ps5_cs *const cs = radv_ps5_cs(streams[i]);
+-      util_dynarray_foreach (&cs->chunks, struct radv_ps5_cs_chunk, chunk) {
+-         memcpy(at, chunk->words, (size_t)chunk->cdw * sizeof(uint32_t));
+-         at += chunk->cdw;
+-      }
+-      memcpy(at, cs->base.buf, (size_t)cs->base.cdw * sizeof(uint32_t));
+-      at += cs->base.cdw;
++      util_dynarray_foreach (&cs->chunks, struct radv_ps5_cs_chunk, chunk)
++         at = radv_ps5_stream_words(at, chunk->words, chunk->cdw);
++      at = radv_ps5_stream_words(at, cs->base.buf, cs->base.cdw);
+    }
+    return at;
+ }
+@@ -665,12 +705,12 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+                                               : util_dynarray_num_elements(&pieces, struct radv_ps5_cs_chunk);
+       for (unsigned p = unit->first_piece; p < end; p++) {
+          const struct radv_ps5_cs_chunk *const piece = util_dynarray_element(&pieces, struct radv_ps5_cs_chunk, p);
+-         memcpy(at, piece->words, (size_t)piece->cdw * sizeof(uint32_t));
+-         at += piece->cdw;
++         at = radv_ps5_stream_words(at, piece->words, piece->cdw);
+       }
+    }
+-   radv_ps5_completion_words(at, (uint64_t)(uintptr_t)queue->marker, (uint32_t)seq);
+-   at += RADV_PS5_COMPLETION_WORDS;
++   uint32_t completion[RADV_PS5_COMPLETION_WORDS];
++   radv_ps5_completion_words(completion, (uint64_t)(uintptr_t)queue->marker, (uint32_t)seq);
++   at = radv_ps5_stream_words(at, completion, RADV_PS5_COMPLETION_WORDS);
+    assert((uint32_t)(at - words) == count);
+    util_dynarray_fini(&pieces);
+    util_dynarray_fini(&units);
+@@ -682,7 +722,7 @@ radv_ps5_cs_submit(struct radeon_winsys_ctx *rctx, const struct radv_winsys_subm
+    for (unsigned i = 0; i < parts && submitted == 0; i++) {
+       const uint32_t start = *util_dynarray_element(&starts, uint32_t, i);
+       const uint32_t end = i + 1 < parts ? *util_dynarray_element(&starts, uint32_t, i + 1) : count;
+-      submitted = radv_ps5_submit(words + start, end - start, queue->marker, (uint32_t)seq);
++      submitted = radv_ps5_submit(words + start, end - start, RADV_PS5_STREAMED_COPY, queue->marker, (uint32_t)seq);
+    }
+    util_dynarray_fini(&starts);
+    radv_ps5_note_submission(count, copy_start - claim_start, copy_end - copy_start);
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_platform.c b/src/amd/vulkan/winsys/ps5/radv_ps5_platform.c
+index ebab94c..857c60c 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_platform.c
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_platform.c
+@@ -703,12 +703,17 @@ radv_ps5_kick_start(void)
+ }
+ 
+ int
+-radv_ps5_submit(uint32_t *words, uint32_t count, volatile uint32_t *marker, uint32_t marker_value)
++radv_ps5_submit(uint32_t *words, uint32_t count, bool streamed, volatile uint32_t *marker, uint32_t marker_value)
+ {
+    (void)marker;
+    (void)marker_value;
+    const uint64_t started = radv_ps5_ticks();
+-   radv_ps5_cpu_flush(words, (size_t)count * sizeof(uint32_t));
++   /* Streamed words bypassed the CPU's caches: the fence drains the
++    * write-combining buffers before the submission. */
++   if (streamed)
++      __builtin_ia32_sfence();
++   else
++      radv_ps5_cpu_flush(words, (size_t)count * sizeof(uint32_t));
+    const uint64_t flushed = radv_ps5_ticks();
+    struct ps5_agc_submit_description description = {
+       .words = words,
+@@ -985,10 +990,11 @@ radv_ps5_memory_free(struct radv_ps5_memory *memory)
+ }
+ 
+ int
+-radv_ps5_submit(uint32_t *words, uint32_t count, volatile uint32_t *marker, uint32_t marker_value)
++radv_ps5_submit(uint32_t *words, uint32_t count, bool streamed, volatile uint32_t *marker, uint32_t marker_value)
+ {
+    (void)words;
+    (void)count;
++   (void)streamed;
+    /* Nothing runs the words on a PC; the submission completes at once. */
+    if (marker)
+       *marker = marker_value;
+diff --git a/src/amd/vulkan/winsys/ps5/radv_ps5_platform.h b/src/amd/vulkan/winsys/ps5/radv_ps5_platform.h
+index 7fcfd38..e130c74 100644
+--- a/src/amd/vulkan/winsys/ps5/radv_ps5_platform.h
++++ b/src/amd/vulkan/winsys/ps5/radv_ps5_platform.h
+@@ -98,10 +98,13 @@ uint64_t radv_ps5_memory_available_bytes(void);
+  * evictions before what follows. */
+ void radv_ps5_cpu_flush(const void *address, size_t bytes);
+ 
+-/* Submits count PM4 words at words (GPU-visible memory whose CPU lines have
+- * been flushed). The words end with a packet that writes marker_value to
+- * marker once they have run; the host model writes it at once. */
+-int radv_ps5_submit(uint32_t *words, uint32_t count, volatile uint32_t *marker, uint32_t marker_value);
++/* Submits count PM4 words at words (GPU-visible memory). Words written with
++ * non-temporal stores (streamed) are in memory once a store fence orders them;
++ * any others have their CPU lines evicted first. The words end with a packet
++ * that writes marker_value to marker once they have run; the host model writes
++ * it at once. */
++int radv_ps5_submit(uint32_t *words, uint32_t count, bool streamed, volatile uint32_t *marker,
++                    uint32_t marker_value);
+ 
+ /* The ticks (radv_ps5_ticks) radv_ps5_submit spent since the last call, in the
+  * cache flush, in sceAgcDriverSubmitDcb and in sceAgcSuspendPoint (called with

@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ps5cemu <ps5cemu@localhost>
+Date: Tue, 6 Oct 2026 15:31:17 +0000
+Subject: [PATCH] PS5: check only the submodules an external frontend's build
+ fetches
+
+A frontend kept outside the tree (AZAHAR_EXTERNAL_FRONTEND) is built from
+a checkout that has only the submodules its build uses: PS5CEMU-HAR's
+make deps fetches those (tools/deps.json), not Qt's, SDL's, OpenAL's or
+the tests'. With such a frontend, CMake no longer requires every
+submodule in .gitmodules, and the compatibility list (a submodule only
+Qt's frontend reads) is copied only when it is there.
+---
+ CMakeLists.txt | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 878f19ca9..4803fba1a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -296,14 +296,18 @@ function(check_submodules_present)
+         endif()
+     endforeach()
+ endfunction()
+-if (EXISTS "${PROJECT_SOURCE_DIR}/.git/objects")
++# A frontend kept outside the tree (AZAHAR_EXTERNAL_FRONTEND) is built from a checkout that has only
++# the submodules its build uses: its own build fetches those.
++if (EXISTS "${PROJECT_SOURCE_DIR}/.git/objects" AND NOT AZAHAR_EXTERNAL_FRONTEND)
+     # only check submodules when source is obtained via Git
+     check_submodules_present()
+ endif()
+ 
+-configure_file(${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
+-               ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+-               COPYONLY)
++if (EXISTS ${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc)
++    configure_file(${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
++                   ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
++                   COPYONLY)
++endif()
+ if (EXISTS ${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.json)
+     file(COPY "${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.json"
+         DESTINATION "${PROJECT_BINARY_DIR}/dist/compatibility_list/")

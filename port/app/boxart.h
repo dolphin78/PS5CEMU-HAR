@@ -29,6 +29,9 @@ namespace ps5boxart
 	void Fetch(System system, const std::vector<std::string>& ids);
 	// How many covers have arrived since the start: the launcher shows a new one when it changes.
 	uint32_t Arrivals();
+	// Whether GameTDB answered in this session: 1 it did, 0 it did not (no network), -1 not asked yet
+	// (the Setup check's).
+	int Answered();
 	// The launcher's setting: when off, nothing more is fetched.
 	void SetEnabled(bool enabled);
 	// Before a game starts: nothing more is fetched in this session (the app starts over after the

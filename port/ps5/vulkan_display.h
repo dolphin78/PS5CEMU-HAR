@@ -3,9 +3,9 @@
 //
 // The driver (Mesa's RADV with a PS5 winsys, PS5_Mesa) is linked into the title, so its
 // vk_icdGetInstanceProcAddr stands in for a loader. The screen is VideoOut, which the driver
-// exposes as VK_KHR_display: one display, one plane and a 3840x2160 mode (59.94 Hz, or 119.88 Hz
-// where the title declares high-frame-rate output and the display takes it). Swapchains on it are
-// the mode's size (display.h).
+// exposes as VK_KHR_display: one display, one plane and its modes (display.h), of which the
+// surface takes the 3840x2160 one at 59.94 Hz, or at 119.88 Hz with the 120 Hz setting on. Swapchains
+// on it are the mode's size.
 
 #pragma once
 

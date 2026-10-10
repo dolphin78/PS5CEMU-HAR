@@ -8,7 +8,8 @@
 
 Archives are checked against their SHA-256 before use and cached in
 ~/.cache/ps5cemu-deps (PS5CEMU_DEPS_CACHE). Git items are fetched at their pinned
-commit, with only the submodules the item names.
+commit, with only the submodules the item names (a submodule's own ones after it, by their
+path from the item's root).
 """
 
 import hashlib
@@ -95,11 +96,15 @@ def fetch_git(item):
         if subprocess.run(["git", "-C", path, "fetch", "-q", "--depth", "1", "origin", item["commit"]]).returncode != 0:
             git(path, "fetch", "-q", "origin")
         git(path, "checkout", "-q", "--detach", item["commit"])
-    for submodule in item.get("submodules", []):
+    submodules = item.get("submodules", [])
+    for submodule in submodules:
         checkout = os.path.join(path, submodule)
         if not os.path.isdir(checkout) or not os.listdir(checkout):
             print(f"==> [deps] fetching {item['name']} submodule {submodule}", flush=True)
-            git(path, "submodule", "update", "--init", "--depth", "1", "--", submodule)
+            # a submodule's own submodule (listed after it) is updated in the checkout that holds it
+            holder = max((other for other in submodules if submodule.startswith(other + "/")), key=len, default="")
+            git(os.path.join(path, holder), "submodule", "update", "--init", "--depth", "1", "--",
+                os.path.relpath(submodule, holder or "."))
     if "setup" in item and not os.path.exists(here(item["setup_creates"])):
         print(f"==> [deps] setting up {item['name']}", flush=True)
         run(item["setup"], cwd=path)

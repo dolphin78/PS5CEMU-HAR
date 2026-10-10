@@ -19,7 +19,7 @@
       "commit": "dd44bbdc75437332ed22e3ba95126733419ef25a",
       "path": ".deps/ps5-native-app-boilerplate",
       "setup": ["bash", "tools/setup-native-dependencies.sh"],
-      "setup_creates": ".deps/ps5-native-app-boilerplate/.deps/native/ps5-payload-sdk/bin/prospero-clang"
+      "setup_creates": ".deps/ps5-native-app-boilerplate/.deps/native/zlib/root/usr/lib/libz.a"
     },
     {
       "name": "pacbrew",
@@ -80,7 +80,7 @@
       "about": "Mihawk-99's Mesa 26.2 fork: RADV with the PS5 winsys and the VideoOut swapchain, at the revision PS5_Vulkan pins (tools/build-radv.sh builds it with PS5_Vulkan's recipe)",
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_Mesa.git",
-      "commit": "0b2d6d1a61d9bbf89cf8beb88a696144f67c61f8",
+      "commit": "7b59ef27c1b09b9671bc4153c41940c3155c3af2",
       "path": ".deps/PS5_Mesa",
       "creates": ".deps/PS5_Mesa/src/amd/vulkan/winsys/ps5/radv_ps5_winsys.c"
     },
@@ -89,7 +89,7 @@
       "about": "Mihawk-99's PS5_Vulkan: RADV's build and link recipe for titles (tools/build-radv.sh, tools/radv-link.sh), its linker script and the AGC link stubs",
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_Vulkan.git",
-      "commit": "3f3ee69607013b345d2baa6d6a37c86745649a08",
+      "commit": "fde9e3798c2ec1d8fccc90d5067cd6060490607f",
       "path": ".deps/PS5_Vulkan",
       "creates": ".deps/PS5_Vulkan/tools/radv-link.sh"
     },
@@ -98,21 +98,23 @@
       "about": "Mihawk-99's payload SDK fork with the PS5 platform layer RADV's winsys is built on, at the revision PS5_Vulkan pins",
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_PayloadSDK.git",
-      "commit": "95c08f27386fc698f6bbe21dde3030140a41d10b",
+      "commit": "b83202be73e930050e00de0f1b4d9ec46c0391bf",
       "path": ".deps/PS5_PayloadSDK",
       "creates": ".deps/PS5_PayloadSDK/platform/tools/setup-sdk.sh"
     },
     {
       "name": "azahar",
-      "about": "Mihawk-99's PS5_Azahar: Azahar (3DS emulator, GPL-2.0-or-later) with PS5_Dynarmic, whose code cache is the console's executable memory. patches/azahar holds the port's changes (tools/azahar-patches.sh); tools/build-azahar.sh builds its core",
+      "about": "Mihawk-99's PS5_Azahar: Azahar (3DS emulator, GPL-2.0-or-later) with PS5_Dynarmic, whose code cache is the console's executable memory. patches/azahar holds the port's changes (tools/azahar-patches.sh); tools/build-azahar.sh builds its core. A new pin can change what a save state holds: then raise ps5_state_format in src/core/savestate.cpp (patch 0011), or earlier builds' states load into it",
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_Azahar.git",
-      "commit": "4598458e115f108a6e2211eb0763eb22ab383d4c",
+      "commit": "4aef900a1a903d0aa6ea86fdb1e18236fb0d5907",
       "path": ".deps/PS5_Azahar",
       "submodules": ["externals/boost", "externals/nihstro", "externals/soundtouch", "externals/dynarmic", "externals/xbyak", "externals/enet",
                      "externals/teakra", "externals/lodepng/lodepng", "externals/zstd", "externals/libyuv", "externals/dds-ktx", "externals/vma",
                      "externals/vulkan-headers", "externals/sirit/sirit", "externals/faad2/faad2", "externals/library-headers",
-                     "externals/spirv-headers", "externals/spirv-tools", "externals/xxHash", "externals/cryptopp", "externals/inih/inih"],
+                     "externals/spirv-headers", "externals/spirv-tools", "externals/xxHash", "externals/cryptopp", "externals/inih/inih",
+                     "externals/dynarmic/externals/mcl", "externals/dynarmic/externals/robin-map", "externals/dynarmic/externals/zycore",
+                     "externals/dynarmic/externals/zydis"],
       "creates": ".deps/PS5_Azahar/src/core/core.cpp"
     },
     {
@@ -140,6 +142,16 @@
       "files": [
         {"name": "graphicPacks987.zip", "url": "https://github.com/cemu-project/cemu_graphic_packs/releases/download/Github987/graphicPacks987.zip", "sha256": "fff8df5d8122b18871c0485fe266873644ed5254c15ede727bad1ef5f383951d"}
       ]
+    },
+    {
+      "name": "reshade",
+      "about": "ReShade 6.8.0 (BSD-3-Clause): its effect compiler (ReShade FX to SPIR-V), with the SPIR-V headers and stb's image loaders it builds with. port/cemu/ReShadeEffects.cpp compiles effects with it and port/cemu/ReShadeRuntime.cpp runs them",
+      "kind": "git",
+      "url": "https://github.com/crosire/reshade.git",
+      "commit": "18deaa52de0c425a78b329e9cb3c497281cd00ec",
+      "path": ".deps/reshade",
+      "submodules": ["deps/spirv", "deps/stb"],
+      "creates": ".deps/reshade/source/effect_codegen_spirv.cpp"
     },
     {
       "name": "prosperoeden",

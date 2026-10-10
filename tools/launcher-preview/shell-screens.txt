@@ -1,0 +1,97 @@
+# The new launcher's screens (tools/preview-shell.sh): one PNG each in build/shell-preview. It starts
+# as after earlier sessions, on the Wii U side's Home (shell-first.txt has the first start).
+wait 90
+shot home                     # Home: the row, the focused game's preview, the glance cards
+press down                    # Play, Game hub, the Game menu
+wait 20
+shot home-buttons
+press down                    # the glance cards
+wait 20
+shot home-cards
+press up up
+press right                   # the next game in the row
+wait 45
+shot home-next
+press left
+press options                 # the Game menu
+wait 30
+shot game-menu
+press circle
+press down right cross        # the Game hub
+wait 45
+shot hub
+press right cross             # its graphic packs
+wait 45
+shot packs
+press right                   # the first pack's presets
+wait 20
+shot packs-presets
+press cross                   # a preset's dropdown
+wait 30
+shot packs-dropdown
+press circle circle circle    # the dropdown, the presets, the packs: back on the hub
+press circle                  # Home
+press r1                      # the Library
+wait 45
+shot library
+press down                    # the second row
+wait 25
+shot library-row2
+press square                  # sort
+wait 30
+shot library-sort
+press circle
+press triangle                # search: the keyboard
+wait 30
+shot library-search
+press circle
+press r1                      # Settings
+wait 45
+shot settings
+press right                   # Display's rows
+wait 25
+shot settings-display
+press triangle                # a row's help
+wait 30
+shot settings-help
+press circle circle
+press r2                      # the Wii U's section: Graphics
+press right
+wait 25
+shot settings-wiiu-graphics
+press circle
+press down                    # Wii U > Controllers
+press right
+wait 25
+shot settings-wiiu-controllers
+press circle
+press r2                      # the 3DS's section
+press down                    # Screens and borders
+press right
+wait 25
+shot settings-3ds-screens
+press circle
+press r2                      # Help: the Setup check
+press cross
+wait 45
+shot setup
+press down down
+wait 20
+shot setup-focus
+press circle                  # back to Settings
+press l1 l1                   # Home
+press touchpad                # the 3DS side
+wait 60
+shot home-3ds
+press r1                      # its Library, Artic Base first
+wait 45
+shot library-3ds
+press cross                   # Artic Base
+wait 45
+shot artic
+press circle
+press l1                      # Home
+wait 20
+press cross                   # play the focused game
+wait 25
+shot launch
