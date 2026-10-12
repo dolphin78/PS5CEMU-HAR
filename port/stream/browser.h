@@ -4,7 +4,7 @@ namespace ps5stream {
 constexpr const char* kBrowser = R"HTML(<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><title>PS5CEMU-HAR Second Screen</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;background:#090e18;width:100%;height:100%;overflow:hidden}[hidden]{display:none!important}
-#screen{display:block;width:100vw;height:100vh;height:100dvh;object-fit:contain;touch-action:none;user-select:none}
+#screen{display:block;width:100vw;height:100vh;height:100dvh;object-fit:contain;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 #splash{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 30% 25%,#254f7a44,transparent 55%),radial-gradient(ellipse at 80% 80%,#ae7c2526,transparent 50%),#090e18}
 .splash-content{display:flex;flex-direction:column;align-items:center;gap:32px}
 .mark{position:relative;width:152px;height:152px;display:grid;place-items:center;border:1px solid #ffffff12;border-radius:42px;background:linear-gradient(145deg,#ffffff0b,#ffffff02);box-shadow:0 24px 80px #0005,inset 0 1px #ffffff0a}
@@ -22,6 +22,8 @@ constexpr const char* kBrowser = R"HTML(<!doctype html><html><meta name="viewpor
 </div></div>
 <script>
 const screen=document.querySelector('#screen'),splash=document.querySelector('#splash');
+// Keep long presses on the game surface from opening Safari's image actions.
+screen.oncontextmenu=screen.ondragstart=e=>e.preventDefault();
 let active=null,x=0,y=0,inputSocket=null,videoSocket=null,moveScheduled=false,videoAvailable=false,frameTimeout=null;
 function showSplash(){clearTimeout(frameTimeout);frameTimeout=null;videoAvailable=false;screen.hidden=true;splash.hidden=false;release();}
 function showVideo(){videoAvailable=true;screen.hidden=false;splash.hidden=true;clearTimeout(frameTimeout);frameTimeout=setTimeout(showSplash,4000);}
